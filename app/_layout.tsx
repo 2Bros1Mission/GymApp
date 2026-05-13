@@ -5,6 +5,8 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { LanguageProvider } from '../src/contexts/LanguageContext';
+import { NetworkProvider } from '../src/contexts/NetworkContext';
+import { OfflineBanner } from '../src/components/OfflineBanner';
 
 /**
  * Workaround for react-native-web + expo-router pointer-events bug.
@@ -86,16 +88,19 @@ function RootLayoutNav() {
           options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
         />
       </Stack>
+      <OfflineBanner />
     </>
   );
 }
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <LanguageProvider>
-        <RootLayoutNav />
-      </LanguageProvider>
-    </AuthProvider>
+    <NetworkProvider>
+      <AuthProvider>
+        <LanguageProvider>
+          <RootLayoutNav />
+        </LanguageProvider>
+      </AuthProvider>
+    </NetworkProvider>
   );
 }

@@ -102,6 +102,9 @@ export const translations: Translations = {
     'role.trainer': 'Треньор',
     'role.client': 'Клиент',
 
+    'network.offline': 'Няма интернет връзка',
+    'network.actionRequiresNetwork': 'Това действие изисква интернет връзка',
+
     'common.cancel': 'Отказ',
     'common.close': 'Затвори',
     'common.on': 'Вкл.',
@@ -254,6 +257,9 @@ export const translations: Translations = {
 
     'role.trainer': 'Trainer',
     'role.client': 'Client',
+
+    'network.offline': 'No internet connection',
+    'network.actionRequiresNetwork': 'This action requires an internet connection',
 
     'common.cancel': 'Cancel',
     'common.close': 'Close',
