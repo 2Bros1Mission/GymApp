@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
-import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
+import { ColorPalette, FontSize, Spacing, BorderRadius } from '../constants/theme';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -25,77 +26,12 @@ const NAV_ITEMS: NavItem[] = [
 
 export const SIDEBAR_WIDTH = 240;
 
-export function Sidebar() {
-  const router = useRouter();
-  const segments = useSegments();
-  const { profile, signOut } = useAuth();
-  const { t } = useTranslation();
-
-  // The active tab segment is typically segments[1] inside (tabs)
-  const activeSegment = segments[1] ?? 'index';
-
-  return (
-    <View style={styles.container}>
-      {/* Logo / App Name */}
-      <View style={styles.logoSection}>
-        <Ionicons name="fitness" size={32} color={Colors.primary} />
-        <Text style={styles.logoText}>GymApp</Text>
-      </View>
-
-      {/* Navigation Items */}
-      <View style={styles.navSection}>
-        {NAV_ITEMS.map((item) => {
-          const isActive = activeSegment === item.segment;
-          return (
-            <Pressable
-              key={item.segment}
-              style={[styles.navItem, isActive && styles.navItemActive]}
-              onPress={() => router.push(item.route as any)}
-            >
-              <Ionicons
-                name={isActive ? item.iconActive : item.icon}
-                size={22}
-                color={isActive ? Colors.white : Colors.textMuted}
-              />
-              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                {t(item.labelKey)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Bottom: Profile + Logout */}
-      <View style={styles.bottomSection}>
-        <View style={styles.profileRow}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={20} color={Colors.white} />
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName} numberOfLines={1}>
-              {profile?.name ?? '—'}
-            </Text>
-            <Text style={styles.profileRole}>
-              {profile?.role === 'trainer' ? t('role.trainer') : t('role.client')}
-            </Text>
-          </View>
-        </View>
-
-        <Pressable style={styles.logoutBtn} onPress={signOut}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-          <Text style={styles.logoutText}>{t('profile.logout')}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: {
     width: SIDEBAR_WIDTH,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRightWidth: 1,
-    borderRightColor: Colors.border,
+    borderRightColor: colors.border,
     paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.md,
     justifyContent: 'flex-start',
@@ -108,13 +44,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingBottom: Spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     marginBottom: Spacing.lg,
   },
   logoText: {
     fontSize: FontSize.xl,
     fontWeight: '700',
-    color: Colors.white,
+    color: colors.text,
   },
   navSection: {
     flex: 1,
@@ -129,20 +65,20 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   navItemActive: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   navLabel: {
     fontSize: FontSize.md,
     fontWeight: '500',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   navLabelActive: {
-    color: Colors.white,
+    color: colors.white,
     fontWeight: '600',
   },
   bottomSection: {
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     paddingTop: Spacing.lg,
     gap: Spacing.md,
   },
@@ -156,7 +92,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: colors.surfaceLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -166,11 +102,11 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: FontSize.sm,
     fontWeight: '600',
-    color: Colors.white,
+    color: colors.text,
   },
   profileRole: {
     fontSize: FontSize.xs,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   logoutBtn: {
     flexDirection: 'row',
@@ -182,7 +118,70 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     fontSize: FontSize.sm,
-    color: Colors.error,
+    color: colors.error,
     fontWeight: '500',
   },
 });
+
+export function Sidebar() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { profile, signOut } = useAuth();
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  const activeSegment = segments[1] ?? 'index';
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.logoSection}>
+        <Ionicons name="fitness" size={32} color={colors.primary} />
+        <Text style={styles.logoText}>GymApp</Text>
+      </View>
+
+      <View style={styles.navSection}>
+        {NAV_ITEMS.map((item) => {
+          const isActive = activeSegment === item.segment;
+          return (
+            <Pressable
+              key={item.segment}
+              style={[styles.navItem, isActive && styles.navItemActive]}
+              onPress={() => router.push(item.route as any)}
+            >
+              <Ionicons
+                name={isActive ? item.iconActive : item.icon}
+                size={22}
+                color={isActive ? colors.white : colors.textMuted}
+              />
+              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                {t(item.labelKey)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.bottomSection}>
+        <View style={styles.profileRow}>
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={20} color={colors.white} />
+          </View>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName} numberOfLines={1}>
+              {profile?.name ?? '—'}
+            </Text>
+            <Text style={styles.profileRole}>
+              {profile?.role === 'trainer' ? t('role.trainer') : t('role.client')}
+            </Text>
+          </View>
+        </View>
+
+        <Pressable style={styles.logoutBtn} onPress={signOut}>
+          <Ionicons name="log-out-outline" size={20} color={colors.error} />
+          <Text style={styles.logoutText}>{t('profile.logout')}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}

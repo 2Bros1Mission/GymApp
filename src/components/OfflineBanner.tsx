@@ -2,13 +2,15 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Spacing, FontSize } from '../constants/theme';
+import { Spacing, FontSize } from '../constants/theme';
 import { useNetwork } from '../contexts/NetworkContext';
 import { useTranslation } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export function OfflineBanner() {
   const { isConnected } = useNetwork();
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-60)).current;
 
@@ -27,12 +29,13 @@ export function OfflineBanner() {
         {
           paddingTop: insets.top + 4,
           transform: [{ translateY: slideAnim }],
+          backgroundColor: colors.error,
         },
       ]}
       pointerEvents={isConnected ? 'none' : 'auto'}
     >
-      <Ionicons name="cloud-offline-outline" size={18} color={Colors.white} />
-      <Text style={styles.bannerText}>{t('network.offline')}</Text>
+      <Ionicons name="cloud-offline-outline" size={18} color={colors.white} />
+      <Text style={[styles.bannerText, { color: colors.white }]}>{t('network.offline')}</Text>
     </Animated.View>
   );
 }
@@ -43,7 +46,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.error,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -55,6 +57,5 @@ const styles = StyleSheet.create({
   bannerText: {
     fontSize: FontSize.sm,
     fontWeight: '600',
-    color: Colors.white,
   },
 });

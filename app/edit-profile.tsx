@@ -2,10 +2,11 @@ import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoid
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Colors, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
+import { useState, useMemo } from 'react';
+import { ColorPalette, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTranslation } from '../src/contexts/LanguageContext';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { useBreakpoint } from '../src/hooks/useBreakpoint';
 import { supabase } from '../src/lib/supabase';
 
@@ -17,10 +18,41 @@ const GOALS = [
   'improve_endurance',
 ] as const;
 
+const makeStyles = (colors: ColorPalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl },
+  scrollContentWide: { maxWidth: 480, width: '100%', alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Spacing.md, marginBottom: Spacing.lg },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: FontSize.xl, fontWeight: '700', color: colors.text },
+  avatarSection: { alignItems: 'center', marginBottom: Spacing.xl },
+  avatar: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 36, fontWeight: '700', color: colors.white },
+  form: { gap: Spacing.lg },
+  fieldGroup: { gap: Spacing.xs },
+  fieldLabel: { fontSize: FontSize.sm, fontWeight: '600', color: colors.textSecondary, marginLeft: Spacing.sm },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm, borderWidth: 1, borderColor: colors.border },
+  input: { flex: 1, fontSize: FontSize.md, color: colors.text, paddingVertical: Spacing.sm },
+  goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  goalOption: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border },
+  goalOptionActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  goalOptionText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.textSecondary },
+  goalOptionTextActive: { color: colors.white },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.error + '15', borderRadius: BorderRadius.md, padding: Spacing.md },
+  errorText: { fontSize: FontSize.sm, color: colors.error, flex: 1 },
+  successBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.success + '15', borderRadius: BorderRadius.md, padding: Spacing.md },
+  successText: { fontSize: FontSize.sm, color: colors.success, flex: 1 },
+  saveButton: { backgroundColor: colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.md + 2, alignItems: 'center', marginTop: Spacing.sm },
+  saveButtonDisabled: { opacity: 0.5 },
+  saveButtonText: { fontSize: FontSize.lg, fontWeight: '700', color: colors.white },
+});
+
 export default function EditProfileScreen() {
   const router = useRouter();
   const { profile, refreshProfile } = useAuth();
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [name, setName] = useState(profile?.name ?? '');
   const [weight, setWeight] = useState(profile?.weight ? String(profile.weight) : '');
@@ -60,7 +92,6 @@ export default function EditProfileScreen() {
     } else {
       setSuccess(true);
       await refreshProfile();
-      // Navigate back after short delay so user sees success
       setTimeout(() => router.back(), 800);
     }
   };
@@ -82,16 +113,14 @@ export default function EditProfileScreen() {
           contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={24} color={Colors.text} />
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
             </Pressable>
             <Text style={styles.title}>{t('profile.editProfile')}</Text>
             <View style={{ width: 44 }} />
           </View>
 
-          {/* Avatar */}
           <View style={styles.avatarSection}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -100,29 +129,26 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
-            {/* Name */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>{t('auth.name')}</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={20} color={Colors.textMuted} />
+                <Ionicons name="person-outline" size={20} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   value={name}
                   onChangeText={(v) => { setName(v); setError(''); setSuccess(false); }}
                   autoCapitalize="words"
                   maxLength={50}
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             </View>
 
-            {/* Weight */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>{t('profile.weightKg')}</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="scale-outline" size={20} color={Colors.textMuted} />
+                <Ionicons name="scale-outline" size={20} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   value={weight}
@@ -130,16 +156,15 @@ export default function EditProfileScreen() {
                   keyboardType="decimal-pad"
                   maxLength={6}
                   placeholder="--"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             </View>
 
-            {/* Height */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>{t('profile.height')}</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="resize-outline" size={20} color={Colors.textMuted} />
+                <Ionicons name="resize-outline" size={20} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   value={height}
@@ -147,12 +172,11 @@ export default function EditProfileScreen() {
                   keyboardType="decimal-pad"
                   maxLength={6}
                   placeholder="--"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             </View>
 
-            {/* Goal */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>{t('profile.selectGoal')}</Text>
               <View style={styles.goalGrid}>
@@ -170,30 +194,27 @@ export default function EditProfileScreen() {
               </View>
             </View>
 
-            {/* Error */}
             {error !== '' && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={18} color={Colors.error} />
+                <Ionicons name="alert-circle" size={18} color={colors.error} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
 
-            {/* Success */}
             {success && (
               <View style={styles.successBox}>
-                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                 <Text style={styles.successText}>{t('profile.saveSuccess')}</Text>
               </View>
             )}
 
-            {/* Save button */}
             <Pressable
               style={[styles.saveButton, (!hasChanges || saving || !name.trim()) && styles.saveButtonDisabled]}
               onPress={handleSave}
               disabled={!hasChanges || saving || !name.trim()}
             >
               {saving ? (
-                <ActivityIndicator color={Colors.white} />
+                <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={styles.saveButtonText}>{t('profile.save')}</Text>
               )}
@@ -204,151 +225,3 @@ export default function EditProfileScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  scrollContentWide: {
-    maxWidth: 480,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  form: {
-    gap: Spacing.lg,
-  },
-  fieldGroup: {
-    gap: Spacing.xs,
-  },
-  fieldLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginLeft: Spacing.sm,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  input: {
-    flex: 1,
-    fontSize: FontSize.md,
-    color: Colors.text,
-    paddingVertical: Spacing.sm,
-  },
-  goalGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  goalOption: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-  },
-  goalOptionActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  goalOptionText: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  goalOptionTextActive: {
-    color: Colors.white,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.error + '15',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-  },
-  errorText: {
-    fontSize: FontSize.sm,
-    color: Colors.error,
-    flex: 1,
-  },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.success + '15',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-  },
-  successText: {
-    fontSize: FontSize.sm,
-    color: Colors.success,
-    flex: 1,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md + 2,
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-});

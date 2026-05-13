@@ -1,16 +1,15 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState, useCallback } from 'react';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats, getWorkoutHistory } from '../../src/lib/workoutService';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { SkeletonWeekCalendar, SkeletonStatCard, SkeletonHistoryItem } from '../../src/components/SkeletonLoader';
-
-// Day labels are now provided via translations
+import { useTheme } from '../../src/contexts/ThemeContext';
 
 interface WorkoutLogEntry {
   id: string;
@@ -19,7 +18,39 @@ interface WorkoutLogEntry {
   duration_seconds: number | null;
 }
 
-function WeekCalendar({ weekDays, dayLabels }: { weekDays: boolean[]; dayLabels: string[] }) {
+const makeStyles = (colors: ColorPalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+  title: { fontSize: FontSize.xxl, fontWeight: '700', color: colors.text },
+  section: { paddingHorizontal: Spacing.lg, marginTop: Spacing.lg },
+  sectionTitle: { fontSize: FontSize.lg, fontWeight: '700', color: colors.text, marginBottom: Spacing.md },
+  weekCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  dayCol: { alignItems: 'center', gap: Spacing.sm },
+  dayLabel: { fontSize: FontSize.xs, color: colors.textSecondary, fontWeight: '600' },
+  dayCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' },
+  dayCircleActive: { backgroundColor: colors.primary },
+  weekSummary: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.md },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: Spacing.lg, gap: Spacing.sm, marginTop: Spacing.lg },
+  progressCard: { width: '48%', backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, flexGrow: 1 },
+  progressHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+  progressLabel: { fontSize: FontSize.xs, color: colors.textSecondary, fontWeight: '600' },
+  progressValue: { fontSize: FontSize.xl, fontWeight: '700', color: colors.text },
+  progressChange: { fontSize: FontSize.xs, fontWeight: '600', marginTop: 2 },
+  historyCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.md },
+  historyItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  historyDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  historyInfo: { flex: 1 },
+  historyName: { fontSize: FontSize.md, color: colors.text, fontWeight: '600' },
+  historyMeta: { fontSize: FontSize.xs, color: colors.textSecondary },
+  emptyCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md },
+  emptyText: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  desktopHistoryRow: { flexDirection: 'row', gap: Spacing.lg },
+  desktopHistorySection: { flex: 1 },
+});
+
+function WeekCalendar({ weekDays, dayLabels, colors }: { weekDays: boolean[]; dayLabels: string[]; colors: ColorPalette }) {
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.weekRow}>
       {dayLabels.map((day, i) => (
@@ -27,7 +58,7 @@ function WeekCalendar({ weekDays, dayLabels }: { weekDays: boolean[]; dayLabels:
           <Text style={styles.dayLabel}>{day}</Text>
           <View style={[styles.dayCircle, weekDays[i] && styles.dayCircleActive]}>
             {weekDays[i] && (
-              <Ionicons name="checkmark" size={16} color={Colors.white} />
+              <Ionicons name="checkmark" size={16} color={colors.white} />
             )}
           </View>
         </View>
@@ -36,22 +67,24 @@ function WeekCalendar({ weekDays, dayLabels }: { weekDays: boolean[]; dayLabels:
   );
 }
 
-function ProgressStat({ label, value, change, icon }: {
+function ProgressStat({ label, value, change, icon, colors }: {
   label: string;
   value: string;
   change?: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
+  colors: ColorPalette;
 }) {
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const isPositive = change?.startsWith('+');
   return (
     <View style={styles.progressCard}>
       <View style={styles.progressHeader}>
-        <Ionicons name={icon} size={20} color={Colors.primary} />
+        <Ionicons name={icon} size={20} color={colors.primary} />
         <Text style={styles.progressLabel}>{label}</Text>
       </View>
       <Text style={styles.progressValue}>{value}</Text>
       {change && (
-        <Text style={[styles.progressChange, { color: isPositive ? Colors.success : Colors.error }]}>
+        <Text style={[styles.progressChange, { color: isPositive ? colors.success : colors.error }]}>
           {change}
         </Text>
       )}
@@ -59,11 +92,13 @@ function ProgressStat({ label, value, change, icon }: {
   );
 }
 
-function WorkoutHistoryItem({ name, date, duration }: {
+function WorkoutHistoryItem({ name, date, duration, colors }: {
   name: string;
   date: string;
   duration: string;
+  colors: ColorPalette;
 }) {
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.historyItem}>
       <View style={styles.historyDot} />
@@ -71,7 +106,7 @@ function WorkoutHistoryItem({ name, date, duration }: {
         <Text style={styles.historyName}>{name}</Text>
         <Text style={styles.historyMeta}>{date} · {duration}</Text>
       </View>
-      <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+      <Ionicons name="checkmark-circle" size={20} color={colors.success} />
     </View>
   );
 }
@@ -90,6 +125,8 @@ function formatDuration(seconds: number | null, minLabel: string): string {
 export default function ProgressScreen() {
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [stats, setStats] = useState({
     totalWorkouts: 0,
@@ -143,7 +180,7 @@ export default function ProgressScreen() {
               <SkeletonWeekCalendar />
             ) : (
               <View style={styles.weekCard}>
-                <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} />
+                <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} colors={colors} />
                 <Text style={styles.weekSummary}>
                   {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
                 </Text>
@@ -164,22 +201,26 @@ export default function ProgressScreen() {
                 label={t('progress.weight')}
                 value={user ? `${(user as any).weight ?? '--'} ${kgLabel}` : `-- ${kgLabel}`}
                 icon="scale"
+                colors={colors}
               />
               <ProgressStat
                 label={t('progress.workouts')}
                 value={`${stats.totalWorkouts}`}
                 change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
                 icon="barbell"
+                colors={colors}
               />
               <ProgressStat
                 label={t('home.streak')}
                 value={`${stats.streak} ${t('home.days')}`}
                 icon="flame"
+                colors={colors}
               />
               <ProgressStat
                 label={t('home.thisWeek')}
                 value={`${stats.thisWeek}`}
                 icon="calendar"
+                colors={colors}
               />
             </View>
           )}
@@ -201,12 +242,13 @@ export default function ProgressScreen() {
                       name={log.workout_name}
                       date={formatDate(log.date, months)}
                       duration={formatDuration(log.duration_seconds, minLabel)}
+                      colors={colors}
                     />
                   ))}
                 </View>
               ) : (
                 <View style={styles.emptyCard}>
-                  <Ionicons name="barbell-outline" size={40} color={Colors.textMuted} />
+                  <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
                   <Text style={styles.emptyText}>
                     {t('progress.noWorkouts')}
                   </Text>
@@ -221,149 +263,3 @@ export default function ProgressScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  title: {
-    fontSize: FontSize.xxl,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  section: {
-    paddingHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-  weekCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dayCol: {
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  dayLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  dayCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCircleActive: {
-    backgroundColor: Colors.primary,
-  },
-  weekSummary: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: Spacing.md,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-  },
-  progressCard: {
-    width: '48%',
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    flexGrow: 1,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  progressLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  progressValue: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  progressChange: {
-    fontSize: FontSize.xs,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  historyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  historyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  historyDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.primary,
-  },
-  historyInfo: {
-    flex: 1,
-  },
-  historyName: {
-    fontSize: FontSize.md,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  historyMeta: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-  },
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  emptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  desktopHistoryRow: {
-    flexDirection: 'row',
-    gap: Spacing.lg,
-  },
-  desktopHistorySection: {
-    flex: 1,
-  },
-});

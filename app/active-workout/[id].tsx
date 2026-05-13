@@ -2,9 +2,10 @@ import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { saveWorkoutLog } from '../../src/lib/workoutService';
@@ -26,11 +27,66 @@ interface ActiveExercise {
   restSeconds: number;
 }
 
+const makeStyles = (colors: ColorPalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  timerContainer: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, backgroundColor: colors.surface, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
+  timerText: { fontSize: FontSize.md, fontWeight: '700', color: colors.text },
+  progressSection: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  progressBarBg: { flex: 1, height: 6, backgroundColor: colors.surfaceLight, borderRadius: BorderRadius.full, overflow: 'hidden' },
+  progressBarFill: { height: '100%', backgroundColor: colors.primary, borderRadius: BorderRadius.full },
+  progressText: { fontSize: FontSize.xs, color: colors.textSecondary, fontWeight: '600' },
+  restOverlay: { marginHorizontal: Spacing.lg, backgroundColor: colors.primaryDark, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', marginBottom: Spacing.md },
+  restLabel: { fontSize: FontSize.sm, color: colors.primaryLight, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 2 },
+  restTime: { fontSize: 48, fontWeight: '700', color: colors.white, marginVertical: Spacing.sm },
+  skipRestBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: colors.primaryLight },
+  skipRestText: { fontSize: FontSize.sm, color: colors.primaryLight, fontWeight: '600' },
+  content: { paddingHorizontal: Spacing.lg },
+  exerciseNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.lg, marginVertical: Spacing.md },
+  navBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  navBtnDisabled: { opacity: 0.5 },
+  exerciseCounter: { fontSize: FontSize.sm, color: colors.textSecondary, fontWeight: '600' },
+  exerciseName: { fontSize: FontSize.xxl, fontWeight: '700', color: colors.text, textAlign: 'center', marginBottom: Spacing.xs },
+  exerciseTarget: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', marginBottom: Spacing.xl },
+  setsHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm },
+  setHeaderText: { fontSize: FontSize.xs, color: colors.textMuted, fontWeight: '600', textAlign: 'center', textTransform: 'uppercase' },
+  setRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: BorderRadius.md, marginBottom: Spacing.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm },
+  setRowCompleted: { backgroundColor: colors.success + '15', borderWidth: 1, borderColor: colors.success + '30' },
+  setNumber: { fontSize: FontSize.md, fontWeight: '700', color: colors.textSecondary, textAlign: 'center' },
+  setInput: { backgroundColor: colors.surfaceLight, borderRadius: BorderRadius.sm, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm, fontSize: FontSize.md, fontWeight: '600', color: colors.text, textAlign: 'center', marginHorizontal: Spacing.xs },
+  checkBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  checkBtnDone: { backgroundColor: colors.success },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.lg, paddingBottom: Spacing.xl, backgroundColor: colors.background + 'F0' },
+  nextExerciseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, gap: Spacing.sm },
+  nextExerciseText: { fontSize: FontSize.md, fontWeight: '700', color: colors.white },
+  finishBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.success, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, gap: Spacing.sm },
+  finishBtnText: { fontSize: FontSize.md, fontWeight: '700', color: colors.white },
+  completeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
+  completeTitle: { fontSize: FontSize.xxxl, fontWeight: '700', color: colors.text, marginTop: Spacing.lg },
+  completeSubtitle: { fontSize: FontSize.lg, color: colors.textSecondary, marginTop: Spacing.sm },
+  completeStats: { flexDirection: 'row', gap: Spacing.xl, marginTop: Spacing.xl, marginBottom: Spacing.xxl },
+  completeStat: { alignItems: 'center' },
+  completeStatValue: { fontSize: FontSize.xl, fontWeight: '700', color: colors.text },
+  completeStatLabel: { fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 4 },
+  errorToast: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.error + '15', borderRadius: BorderRadius.md, padding: Spacing.md, gap: Spacing.sm, marginBottom: Spacing.md, width: '100%', borderWidth: 1, borderColor: colors.error + '30' },
+  errorToastText: { flex: 1, fontSize: FontSize.sm, color: colors.error, fontWeight: '500' },
+  retryButton: { backgroundColor: colors.error, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+  retryButtonText: { fontSize: FontSize.sm, fontWeight: '700', color: colors.white },
+  doneButton: { backgroundColor: colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xxl },
+  doneButtonText: { fontSize: FontSize.md, fontWeight: '700', color: colors.white },
+  errorText: { fontSize: FontSize.lg, color: colors.textSecondary, textAlign: 'center', marginTop: 100 },
+  centeredPanel: { maxWidth: 600, width: '100%', alignSelf: 'center' },
+});
+
 export default function ActiveWorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t, language } = useTranslation();
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const workout = sampleWorkouts.find((w) => w.id === id);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [exercises, setExercises] = useState<ActiveExercise[]>([]);
@@ -199,7 +255,7 @@ export default function ActiveWorkoutScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={[styles.completeContainer, isWide && styles.centeredPanel]}>
-          <Ionicons name="checkmark-circle" size={80} color={Colors.success} />
+          <Ionicons name="checkmark-circle" size={80} color={colors.success} />
           <Text style={styles.completeTitle}>{t('exercise.completed')}</Text>
           <Text style={styles.completeSubtitle}>{t('exercise.great')}</Text>
           <View style={styles.completeStats}>
@@ -219,7 +275,7 @@ export default function ActiveWorkoutScreen() {
 
           {saveError && (
             <View style={styles.errorToast}>
-              <Ionicons name="alert-circle" size={20} color={Colors.error} />
+              <Ionicons name="alert-circle" size={20} color={colors.error} />
               <Text style={styles.errorToastText}>{t('activeWorkout.saveFailed')}</Text>
               <Pressable
                 style={styles.retryButton}
@@ -244,438 +300,126 @@ export default function ActiveWorkoutScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={[isWide && styles.centeredPanel, { flex: 1 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-          <Ionicons name="close" size={24} color={Colors.text} />
-        </Pressable>
-        <View style={styles.timerContainer}>
-          <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
-          <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={styles.progressSection}>
-        <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
-        </View>
-        <Text style={styles.progressText}>
-          {completedSets}/{totalSets} {t('exercise.sets')}
-        </Text>
-      </View>
-
-      {isResting && (
-        <View style={styles.restOverlay}>
-          <Text style={styles.restLabel}>{t('exercise.rest')}</Text>
-          <Text style={styles.restTime}>{formatTime(restTimer)}</Text>
-          <Pressable
-            style={styles.skipRestBtn}
-            onPress={() => { setIsResting(false); setRestTimer(0); }}
-          >
-            <Text style={styles.skipRestText}>{t('exercise.skip')}</Text>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.closeBtn}>
+            <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
+          <View style={styles.timerContainer}>
+            <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.timerText}>{formatTime(elapsedSeconds)}</Text>
+          </View>
+          <View style={{ width: 40 }} />
         </View>
-      )}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <View style={styles.exerciseNav}>
-          <Pressable
-            onPress={goToPrevExercise}
-            style={[styles.navBtn, currentExerciseIndex === 0 && styles.navBtnDisabled]}
-            disabled={currentExerciseIndex === 0}
-          >
-            <Ionicons name="chevron-back" size={20} color={currentExerciseIndex === 0 ? Colors.textMuted : Colors.text} />
-          </Pressable>
-          <Text style={styles.exerciseCounter}>
-            {currentExerciseIndex + 1} / {exercises.length}
+        <View style={styles.progressSection}>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
+          </View>
+          <Text style={styles.progressText}>
+            {completedSets}/{totalSets} {t('exercise.sets')}
           </Text>
-          <Pressable
-            onPress={goToNextExercise}
-            style={[styles.navBtn, currentExerciseIndex === exercises.length - 1 && styles.navBtnDisabled]}
-            disabled={currentExerciseIndex === exercises.length - 1}
-          >
-            <Ionicons name="chevron-forward" size={20} color={currentExerciseIndex === exercises.length - 1 ? Colors.textMuted : Colors.text} />
-          </Pressable>
         </View>
 
-        <Text style={styles.exerciseName}>{language === 'bg' ? currentExercise.nameBg : currentExercise.name}</Text>
-        <Text style={styles.exerciseTarget}>
-          {t('exercise.target')}: {currentExercise.sets[0].targetReps} {t('exercise.reps')}
-        </Text>
-
-        <View style={styles.setsHeader}>
-          <Text style={[styles.setHeaderText, { flex: 0.5 }]}>{t('exercise.set')}</Text>
-          <Text style={[styles.setHeaderText, { flex: 1 }]}>{t('exercise.weight')}</Text>
-          <Text style={[styles.setHeaderText, { flex: 1 }]}>{t('exercise.repsShort')}</Text>
-          <Text style={[styles.setHeaderText, { flex: 0.5 }]}></Text>
-        </View>
-
-        {currentExercise.sets.map((set, i) => (
-          <View
-            key={i}
-            style={[styles.setRow, set.completed && styles.setRowCompleted]}
-          >
-            <Text style={[styles.setNumber, { flex: 0.5 }]}>{set.setNumber}</Text>
-            <TextInput
-              style={[styles.setInput, { flex: 1 }]}
-              value={set.weight}
-              onChangeText={(v) => updateSetField(i, 'weight', v)}
-              placeholder="-"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="numeric"
-              editable={!set.completed}
-            />
-            <TextInput
-              style={[styles.setInput, { flex: 1 }]}
-              value={set.reps}
-              onChangeText={(v) => updateSetField(i, 'reps', v)}
-              placeholder={set.targetReps}
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="numeric"
-              editable={!set.completed}
-            />
+        {isResting && (
+          <View style={styles.restOverlay}>
+            <Text style={styles.restLabel}>{t('exercise.rest')}</Text>
+            <Text style={styles.restTime}>{formatTime(restTimer)}</Text>
             <Pressable
-              style={[styles.checkBtn, set.completed && styles.checkBtnDone, { flex: 0.5 }]}
-              onPress={() => toggleSetComplete(i)}
+              style={styles.skipRestBtn}
+              onPress={() => { setIsResting(false); setRestTimer(0); }}
             >
-              <Ionicons
-                name={set.completed ? 'checkmark' : 'checkmark'}
-                size={20}
-                color={set.completed ? Colors.white : Colors.textMuted}
-              />
+              <Text style={styles.skipRestText}>{t('exercise.skip')}</Text>
             </Pressable>
           </View>
-        ))}
-
-        <View style={{ height: 120 }} />
-      </ScrollView>
-
-      <View style={styles.bottomBar}>
-        {currentExerciseIndex < exercises.length - 1 ? (
-          <Pressable style={styles.nextExerciseBtn} onPress={goToNextExercise}>
-            <Text style={styles.nextExerciseText}>{t('activeWorkout.nextExercise')}</Text>
-            <Ionicons name="arrow-forward" size={20} color={Colors.white} />
-          </Pressable>
-        ) : (
-          <Pressable style={styles.finishBtn} onPress={finishWorkout}>
-            <Ionicons name="checkmark-circle" size={22} color={Colors.white} />
-            <Text style={styles.finishBtnText}>{t('exercise.finish')}</Text>
-          </Pressable>
         )}
-      </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          <View style={styles.exerciseNav}>
+            <Pressable
+              onPress={goToPrevExercise}
+              style={[styles.navBtn, currentExerciseIndex === 0 && styles.navBtnDisabled]}
+              disabled={currentExerciseIndex === 0}
+            >
+              <Ionicons name="chevron-back" size={20} color={currentExerciseIndex === 0 ? colors.textMuted : colors.text} />
+            </Pressable>
+            <Text style={styles.exerciseCounter}>
+              {currentExerciseIndex + 1} / {exercises.length}
+            </Text>
+            <Pressable
+              onPress={goToNextExercise}
+              style={[styles.navBtn, currentExerciseIndex === exercises.length - 1 && styles.navBtnDisabled]}
+              disabled={currentExerciseIndex === exercises.length - 1}
+            >
+              <Ionicons name="chevron-forward" size={20} color={currentExerciseIndex === exercises.length - 1 ? colors.textMuted : colors.text} />
+            </Pressable>
+          </View>
+
+          <Text style={styles.exerciseName}>{language === 'bg' ? currentExercise.nameBg : currentExercise.name}</Text>
+          <Text style={styles.exerciseTarget}>
+            {t('exercise.target')}: {currentExercise.sets[0].targetReps} {t('exercise.reps')}
+          </Text>
+
+          <View style={styles.setsHeader}>
+            <Text style={[styles.setHeaderText, { flex: 0.5 }]}>{t('exercise.set')}</Text>
+            <Text style={[styles.setHeaderText, { flex: 1 }]}>{t('exercise.weight')}</Text>
+            <Text style={[styles.setHeaderText, { flex: 1 }]}>{t('exercise.repsShort')}</Text>
+            <Text style={[styles.setHeaderText, { flex: 0.5 }]}></Text>
+          </View>
+
+          {currentExercise.sets.map((set, i) => (
+            <View
+              key={i}
+              style={[styles.setRow, set.completed && styles.setRowCompleted]}
+            >
+              <Text style={[styles.setNumber, { flex: 0.5 }]}>{set.setNumber}</Text>
+              <TextInput
+                style={[styles.setInput, { flex: 1 }]}
+                value={set.weight}
+                onChangeText={(v) => updateSetField(i, 'weight', v)}
+                placeholder="-"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                editable={!set.completed}
+              />
+              <TextInput
+                style={[styles.setInput, { flex: 1 }]}
+                value={set.reps}
+                onChangeText={(v) => updateSetField(i, 'reps', v)}
+                placeholder={set.targetReps}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                editable={!set.completed}
+              />
+              <Pressable
+                style={[styles.checkBtn, set.completed && styles.checkBtnDone, { flex: 0.5 }]}
+                onPress={() => toggleSetComplete(i)}
+              >
+                <Ionicons
+                  name="checkmark"
+                  size={20}
+                  color={set.completed ? colors.white : colors.textMuted}
+                />
+              </Pressable>
+            </View>
+          ))}
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+
+        <View style={styles.bottomBar}>
+          {currentExerciseIndex < exercises.length - 1 ? (
+            <Pressable style={styles.nextExerciseBtn} onPress={goToNextExercise}>
+              <Text style={styles.nextExerciseText}>{t('activeWorkout.nextExercise')}</Text>
+              <Ionicons name="arrow-forward" size={20} color={colors.white} />
+            </Pressable>
+          ) : (
+            <Pressable style={styles.finishBtn} onPress={finishWorkout}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.white} />
+              <Text style={styles.finishBtnText}>{t('exercise.finish')}</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-  },
-  timerText: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  progressSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  progressBarBg: {
-    flex: 1,
-    height: 6,
-    backgroundColor: Colors.surfaceLight,
-    borderRadius: BorderRadius.full,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.full,
-  },
-  progressText: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  restOverlay: {
-    marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.primaryDark,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  restLabel: {
-    fontSize: FontSize.sm,
-    color: Colors.primaryLight,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  restTime: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: Colors.white,
-    marginVertical: Spacing.sm,
-  },
-  skipRestBtn: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.primaryLight,
-  },
-  skipRestText: {
-    fontSize: FontSize.sm,
-    color: Colors.primaryLight,
-    fontWeight: '600',
-  },
-  content: {
-    paddingHorizontal: Spacing.lg,
-  },
-  exerciseNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.lg,
-    marginVertical: Spacing.md,
-  },
-  navBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navBtnDisabled: {
-    opacity: 0.5,
-  },
-  exerciseCounter: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  exerciseName: {
-    fontSize: FontSize.xxl,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
-    marginBottom: Spacing.xs,
-  },
-  exerciseTarget: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: Spacing.xl,
-  },
-  setsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-  },
-  setHeaderText: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    fontWeight: '600',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  setRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-  },
-  setRowCompleted: {
-    backgroundColor: Colors.success + '15',
-    borderWidth: 1,
-    borderColor: Colors.success + '30',
-  },
-  setNumber: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  setInput: {
-    backgroundColor: Colors.surfaceLight,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    fontSize: FontSize.md,
-    fontWeight: '600',
-    color: Colors.text,
-    textAlign: 'center',
-    marginHorizontal: Spacing.xs,
-  },
-  checkBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-  },
-  checkBtnDone: {
-    backgroundColor: Colors.success,
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xl,
-    backgroundColor: Colors.background + 'F0',
-  },
-  nextExerciseBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-  },
-  nextExerciseText: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  finishBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.success,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-  },
-  finishBtnText: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  completeContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
-  },
-  completeTitle: {
-    fontSize: FontSize.xxxl,
-    fontWeight: '700',
-    color: Colors.text,
-    marginTop: Spacing.lg,
-  },
-  completeSubtitle: {
-    fontSize: FontSize.lg,
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
-  },
-  completeStats: {
-    flexDirection: 'row',
-    gap: Spacing.xl,
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.xxl,
-  },
-  completeStat: {
-    alignItems: 'center',
-  },
-  completeStatValue: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  completeStatLabel: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  errorToast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.error + '15',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: Colors.error + '30',
-  },
-  errorToastText: {
-    flex: 1,
-    fontSize: FontSize.sm,
-    color: Colors.error,
-    fontWeight: '500',
-  },
-  retryButton: {
-    backgroundColor: Colors.error,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  retryButtonText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  doneButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
-  },
-  doneButtonText: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  errorText: {
-    fontSize: FontSize.lg,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 100,
-  },
-  centeredPanel: {
-    maxWidth: 600,
-    width: '100%',
-    alignSelf: 'center',
-  },
-});
