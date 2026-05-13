@@ -1,8 +1,9 @@
-const CACHE_NAME = 'gymapp-v1';
+const CACHE_NAME = 'gymapp-v2';
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
   '/',
+  '/offline.html',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -62,7 +63,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first with cache fallback for HTML/JS
+  // Network-first with cache fallback for HTML/JS, offline page as last resort
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -70,6 +71,8 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() =>
+        caches.match(request).then((cached) => cached || caches.match('/offline.html'))
+      )
   );
 });
