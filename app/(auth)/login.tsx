@@ -5,11 +5,13 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const { t } = useTranslation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +21,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setError('Моля, попълни всички полета');
+      setError(t('common.fillAllFields'));
       return;
     }
 
@@ -56,8 +58,8 @@ export default function LoginScreen() {
             <View style={styles.iconContainer}>
               <Ionicons name="barbell" size={40} color={Colors.primary} />
             </View>
-            <Text style={styles.title}>Добре дошъл!</Text>
-            <Text style={styles.subtitle}>Влез в своя акаунт</Text>
+            <Text style={styles.title}>{t('auth.loginTitle')}</Text>
+            <Text style={styles.subtitle}>{t('auth.loginSubtitle')}</Text>
           </View>
 
           <View style={styles.form}>
@@ -65,7 +67,7 @@ export default function LoginScreen() {
               <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Имейл"
+                placeholder={t('auth.email')}
                 placeholderTextColor={Colors.textMuted}
                 value={email}
                 onChangeText={setEmail}
@@ -79,7 +81,7 @@ export default function LoginScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Парола"
+                placeholder={t('auth.password')}
                 placeholderTextColor={Colors.textMuted}
                 value={password}
                 onChangeText={setPassword}
@@ -96,7 +98,7 @@ export default function LoginScreen() {
             </View>
 
             <Pressable style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>Забравена парола?</Text>
+              <Text style={styles.forgotPasswordText}>{t('auth.forgotPassword')}</Text>
             </Pressable>
 
             {error !== '' && (
@@ -114,7 +116,7 @@ export default function LoginScreen() {
               {loading ? (
                 <ActivityIndicator color={Colors.white} />
               ) : (
-                <Text style={styles.submitButtonText}>Влез</Text>
+                <Text style={styles.submitButtonText}>{t('auth.login')}</Text>
               )}
             </Pressable>
           </View>
@@ -124,8 +126,8 @@ export default function LoginScreen() {
             onPress={() => router.replace('/(auth)/signup')}
           >
             <Text style={styles.switchAuthText}>
-              Нямаш акаунт?{' '}
-              <Text style={styles.switchAuthLink}>Регистрирай се</Text>
+              {t('auth.noAccount')}{' '}
+              <Text style={styles.switchAuthLink}>{t('auth.signup')}</Text>
             </Text>
           </Pressable>
         </ScrollView>

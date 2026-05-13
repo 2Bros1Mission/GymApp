@@ -29,7 +29,7 @@ interface ActiveExercise {
 export default function ActiveWorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { user } = useAuth();
   const workout = sampleWorkouts.find((w) => w.id === id);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -91,7 +91,7 @@ export default function ActiveWorkoutScreen() {
   if (!workout || exercises.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Зареждане...</Text>
+        <Text style={styles.errorText}>{t('activeWorkout.loading')}</Text>
       </SafeAreaView>
     );
   }
@@ -163,11 +163,11 @@ export default function ActiveWorkoutScreen() {
       await saveWorkoutLog({
         userId: user.id,
         workoutId: workout.id,
-        workoutName: workout.nameBg,
+        workoutName: language === 'bg' ? workout.nameBg : workout.name,
         durationSeconds: elapsedSeconds,
         exercises: exercises.map((ex, idx) => ({
           exerciseId: ex.exerciseId,
-          exerciseName: ex.nameBg,
+          exerciseName: language === 'bg' ? ex.nameBg : ex.name,
           orderIndex: idx,
           sets: ex.sets.map((s) => ({
             setNumber: s.setNumber,
@@ -193,19 +193,19 @@ export default function ActiveWorkoutScreen() {
           <View style={styles.completeStats}>
             <View style={styles.completeStat}>
               <Text style={styles.completeStatValue}>{formatTime(elapsedSeconds)}</Text>
-              <Text style={styles.completeStatLabel}>Време</Text>
+              <Text style={styles.completeStatLabel}>{t('activeWorkout.time')}</Text>
             </View>
             <View style={styles.completeStat}>
               <Text style={styles.completeStatValue}>{completedSets}/{totalSets}</Text>
-              <Text style={styles.completeStatLabel}>Серии</Text>
+              <Text style={styles.completeStatLabel}>{t('exercise.sets')}</Text>
             </View>
             <View style={styles.completeStat}>
               <Text style={styles.completeStatValue}>{exercises.length}</Text>
-              <Text style={styles.completeStatLabel}>Упражнения</Text>
+              <Text style={styles.completeStatLabel}>{t('activeWorkout.exercises')}</Text>
             </View>
           </View>
           <Pressable style={styles.doneButton} onPress={() => router.back()}>
-            <Text style={styles.doneButtonText}>Затвори</Text>
+            <Text style={styles.doneButtonText}>{t('common.close')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -231,7 +231,7 @@ export default function ActiveWorkoutScreen() {
           <View style={[styles.progressBarFill, { width: `${overallProgress}%` }]} />
         </View>
         <Text style={styles.progressText}>
-          {completedSets}/{totalSets} серии
+          {completedSets}/{totalSets} {t('exercise.sets')}
         </Text>
       </View>
 
@@ -269,15 +269,15 @@ export default function ActiveWorkoutScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.exerciseName}>{currentExercise.nameBg}</Text>
+        <Text style={styles.exerciseName}>{language === 'bg' ? currentExercise.nameBg : currentExercise.name}</Text>
         <Text style={styles.exerciseTarget}>
-          Цел: {currentExercise.sets[0].targetReps} {t('exercise.reps')}
+          {t('exercise.target')}: {currentExercise.sets[0].targetReps} {t('exercise.reps')}
         </Text>
 
         <View style={styles.setsHeader}>
-          <Text style={[styles.setHeaderText, { flex: 0.5 }]}>Серия</Text>
-          <Text style={[styles.setHeaderText, { flex: 1 }]}>кг</Text>
-          <Text style={[styles.setHeaderText, { flex: 1 }]}>Повт.</Text>
+          <Text style={[styles.setHeaderText, { flex: 0.5 }]}>{t('exercise.set')}</Text>
+          <Text style={[styles.setHeaderText, { flex: 1 }]}>{t('exercise.weight')}</Text>
+          <Text style={[styles.setHeaderText, { flex: 1 }]}>{t('exercise.repsShort')}</Text>
           <Text style={[styles.setHeaderText, { flex: 0.5 }]}></Text>
         </View>
 
@@ -324,7 +324,7 @@ export default function ActiveWorkoutScreen() {
       <View style={styles.bottomBar}>
         {currentExerciseIndex < exercises.length - 1 ? (
           <Pressable style={styles.nextExerciseBtn} onPress={goToNextExercise}>
-            <Text style={styles.nextExerciseText}>Следващо упражнение</Text>
+            <Text style={styles.nextExerciseText}>{t('activeWorkout.nextExercise')}</Text>
             <Ionicons name="arrow-forward" size={20} color={Colors.white} />
           </Pressable>
         ) : (

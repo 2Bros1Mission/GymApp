@@ -9,7 +9,7 @@ import { getWorkoutStats, getWorkoutHistory } from '../../src/lib/workoutService
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
-const dayLabels = ['П', 'В', 'С', 'Ч', 'П', 'С', 'Н'];
+// Day labels are now provided via translations
 
 interface WorkoutLogEntry {
   id: string;
@@ -18,7 +18,7 @@ interface WorkoutLogEntry {
   duration_seconds: number | null;
 }
 
-function WeekCalendar({ weekDays }: { weekDays: boolean[] }) {
+function WeekCalendar({ weekDays, dayLabels }: { weekDays: boolean[]; dayLabels: string[] }) {
   return (
     <View style={styles.weekRow}>
       {dayLabels.map((day, i) => (
@@ -75,16 +75,15 @@ function WorkoutHistoryItem({ name, date, duration }: {
   );
 }
 
-function formatDate(dateStr: string): string {
-  const months = ['Яну', 'Фев', 'Мар', 'Апр', 'Май', 'Юни', 'Юли', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
+function formatDate(dateStr: string, months: string[]): string {
   const d = new Date(dateStr);
   return `${d.getDate()} ${months[d.getMonth()]}`;
 }
 
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return '-- мин';
+function formatDuration(seconds: number | null, minLabel: string): string {
+  if (!seconds) return `-- ${minLabel}`;
   const mins = Math.round(seconds / 60);
-  return `${mins} мин`;
+  return `${mins} ${minLabel}`;
 }
 
 export default function ProgressScreen() {
@@ -116,6 +115,10 @@ export default function ProgressScreen() {
   const completedThisWeek = stats.weekDays.filter(Boolean).length;
   const breakpoint = useBreakpoint();
   const isLarge = breakpoint === 'lg';
+  const dayLabels = t('progress.dayLabels').split(',');
+  const months = t('progress.months').split(',');
+  const minLabel = t('progress.min');
+  const kgLabel = t('exercise.weight');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -126,34 +129,34 @@ export default function ProgressScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Тази седмица</Text>
+            <Text style={styles.sectionTitle}>{t('progress.thisWeekSection')}</Text>
             <View style={styles.weekCard}>
-              <WeekCalendar weekDays={stats.weekDays} />
+              <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} />
               <Text style={styles.weekSummary}>
-                {completedThisWeek} от 5 тренировки завършени
+                {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
               </Text>
             </View>
           </View>
 
           <View style={styles.statsGrid}>
             <ProgressStat
-              label="Тегло"
-              value={user ? `${(user as any).weight ?? '--'} кг` : '-- кг'}
+              label={t('progress.weight')}
+              value={user ? `${(user as any).weight ?? '--'} ${kgLabel}` : `-- ${kgLabel}`}
               icon="scale"
             />
             <ProgressStat
-              label="Тренировки"
+              label={t('progress.workouts')}
               value={`${stats.totalWorkouts}`}
-              change={stats.thisWeek > 0 ? `+${stats.thisWeek} тази седмица` : undefined}
+              change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
               icon="barbell"
             />
             <ProgressStat
-              label="Серия"
-              value={`${stats.streak} дни`}
+              label={t('home.streak')}
+              value={`${stats.streak} ${t('home.days')}`}
               icon="flame"
             />
             <ProgressStat
-              label="Тази седмица"
+              label={t('home.thisWeek')}
               value={`${stats.thisWeek}`}
               icon="calendar"
             />
@@ -168,8 +171,8 @@ export default function ProgressScreen() {
                     <WorkoutHistoryItem
                       key={log.id}
                       name={log.workout_name}
-                      date={formatDate(log.date)}
-                      duration={formatDuration(log.duration_seconds)}
+                      date={formatDate(log.date, months)}
+                      duration={formatDuration(log.duration_seconds, minLabel)}
                     />
                   ))}
                 </View>
@@ -177,7 +180,7 @@ export default function ProgressScreen() {
                 <View style={styles.emptyCard}>
                   <Ionicons name="barbell-outline" size={40} color={Colors.textMuted} />
                   <Text style={styles.emptyText}>
-                    Все още няма тренировки.{'\n'}Започни първата си днес!
+                    {t('progress.noWorkouts')}
                   </Text>
                 </View>
               )}
