@@ -51,6 +51,9 @@ export const translations: Translations = {
     'activeWorkout.time': 'Време',
     'activeWorkout.exercises': 'Упражнения',
     'activeWorkout.nextExercise': 'Следващо упражнение',
+    'activeWorkout.saveFailed': 'Неуспешно запазване на тренировката. Опитай отново.',
+    'activeWorkout.retry': 'Опитай пак',
+    'activeWorkout.saving': 'Запазване...',
 
     'progress.title': 'Прогрес',
     'progress.weight': 'Тегло',
@@ -187,6 +190,9 @@ export const translations: Translations = {
     'activeWorkout.time': 'Time',
     'activeWorkout.exercises': 'Exercises',
     'activeWorkout.nextExercise': 'Next Exercise',
+    'activeWorkout.saveFailed': 'Failed to save workout. Please try again.',
+    'activeWorkout.retry': 'Retry',
+    'activeWorkout.saving': 'Saving...',
 
     'progress.title': 'Progress',
     'progress.weight': 'Weight',
