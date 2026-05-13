@@ -1,0 +1,76 @@
+export interface Exercise {
+  id: string;
+  name: string;
+  nameBg: string;
+  muscleGroup: MuscleGroup;
+  sets: number;
+  reps: string;
+  restSeconds: number;
+  imageUrl?: string;
+}
+
+export interface WorkoutExercise extends Exercise {
+  completedSets: SetLog[];
+}
+
+export interface SetLog {
+  setNumber: number;
+  reps: number;
+  weight: number;
+  completed: boolean;
+}
+
+export interface Workout {
+  id: string;
+  name: string;
+  nameBg: string;
+  description: string;
+  descriptionBg: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  durationMinutes: number;
+  muscleGroups: MuscleGroup[];
+  exercises: Exercise[];
+  imageUrl?: string;
+}
+
+export interface WorkoutLog {
+  id: string;
+  workoutId: string;
+  date: string;
+  startTime: string;
+  endTime?: string;
+  exercises: WorkoutExercise[];
+  notes?: string;
+  completed: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'client' | 'trainer';
+  language: 'bg' | 'en';
+  createdAt: string;
+  weight?: number;
+  height?: number;
+  goal?: FitnessGoal;
+}
+
+export type MuscleGroup =
+  | 'chest'
+  | 'back'
+  | 'shoulders'
+  | 'biceps'
+  | 'triceps'
+  | 'legs'
+  | 'core'
+  | 'full_body';
+
+export type FitnessGoal =
+  | 'lose_weight'
+  | 'build_muscle'
+  | 'get_stronger'
+  | 'stay_healthy'
+  | 'improve_endurance';
+
+export type DifficultyLevel = 'beginner' | 'intermediate' | 'advanced';
