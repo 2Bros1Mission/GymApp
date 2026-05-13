@@ -8,6 +8,7 @@ import { t } from '../../src/constants/i18n';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { saveWorkoutLog } from '../../src/lib/workoutService';
+import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 interface ActiveSet {
   setNumber: number;
@@ -179,10 +180,13 @@ export default function ActiveWorkoutScreen() {
     }
   };
 
+  const breakpoint = useBreakpoint();
+  const isWide = breakpoint !== 'sm';
+
   if (workoutComplete) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.completeContainer}>
+        <View style={[styles.completeContainer, isWide && styles.centeredPanel]}>
           <Ionicons name="checkmark-circle" size={80} color={Colors.success} />
           <Text style={styles.completeTitle}>{t('exercise.completed')}</Text>
           <Text style={styles.completeSubtitle}>{t('exercise.great')}</Text>
@@ -210,6 +214,7 @@ export default function ActiveWorkoutScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={[isWide && styles.centeredPanel, { flex: 1 }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Ionicons name="close" size={24} color={Colors.text} />
@@ -328,6 +333,7 @@ export default function ActiveWorkoutScreen() {
             <Text style={styles.finishBtnText}>{t('exercise.finish')}</Text>
           </Pressable>
         )}
+      </View>
       </View>
     </SafeAreaView>
   );
@@ -608,5 +614,10 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     marginTop: 100,
+  },
+  centeredPanel: {
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
   },
 });

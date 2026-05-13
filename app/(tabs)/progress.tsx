@@ -6,6 +6,8 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import { t } from '../../src/constants/i18n';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats, getWorkoutHistory } from '../../src/lib/workoutService';
+import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
+import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 const dayLabels = ['П', 'В', 'С', 'Ч', 'П', 'С', 'Н'];
 
@@ -111,72 +113,78 @@ export default function ProgressScreen() {
   }, [loadData]);
 
   const completedThisWeek = stats.weekDays.filter(Boolean).length;
+  const breakpoint = useBreakpoint();
+  const isLarge = breakpoint === 'lg';
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('progress.title')}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Тази седмица</Text>
-          <View style={styles.weekCard}>
-            <WeekCalendar weekDays={stats.weekDays} />
-            <Text style={styles.weekSummary}>
-              {completedThisWeek} от 5 тренировки завършени
-            </Text>
+        <ResponsiveContainer>
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('progress.title')}</Text>
           </View>
-        </View>
 
-        <View style={styles.statsGrid}>
-          <ProgressStat
-            label="Тегло"
-            value={user ? `${(user as any).weight ?? '--'} кг` : '-- кг'}
-            icon="scale"
-          />
-          <ProgressStat
-            label="Тренировки"
-            value={`${stats.totalWorkouts}`}
-            change={stats.thisWeek > 0 ? `+${stats.thisWeek} тази седмица` : undefined}
-            icon="barbell"
-          />
-          <ProgressStat
-            label="Серия"
-            value={`${stats.streak} дни`}
-            icon="flame"
-          />
-          <ProgressStat
-            label="Тази седмица"
-            value={`${stats.thisWeek}`}
-            icon="calendar"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('progress.history')}</Text>
-          {history.length > 0 ? (
-            <View style={styles.historyCard}>
-              {history.map((log) => (
-                <WorkoutHistoryItem
-                  key={log.id}
-                  name={log.workout_name}
-                  date={formatDate(log.date)}
-                  duration={formatDuration(log.duration_seconds)}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyCard}>
-              <Ionicons name="barbell-outline" size={40} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>
-                Все още няма тренировки.{'\n'}Започни първата си днес!
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Тази седмица</Text>
+            <View style={styles.weekCard}>
+              <WeekCalendar weekDays={stats.weekDays} />
+              <Text style={styles.weekSummary}>
+                {completedThisWeek} от 5 тренировки завършени
               </Text>
             </View>
-          )}
-        </View>
+          </View>
 
-        <View style={{ height: Spacing.xl }} />
+          <View style={styles.statsGrid}>
+            <ProgressStat
+              label="Тегло"
+              value={user ? `${(user as any).weight ?? '--'} кг` : '-- кг'}
+              icon="scale"
+            />
+            <ProgressStat
+              label="Тренировки"
+              value={`${stats.totalWorkouts}`}
+              change={stats.thisWeek > 0 ? `+${stats.thisWeek} тази седмица` : undefined}
+              icon="barbell"
+            />
+            <ProgressStat
+              label="Серия"
+              value={`${stats.streak} дни`}
+              icon="flame"
+            />
+            <ProgressStat
+              label="Тази седмица"
+              value={`${stats.thisWeek}`}
+              icon="calendar"
+            />
+          </View>
+
+          <View style={isLarge ? styles.desktopHistoryRow : undefined}>
+            <View style={[styles.section, isLarge && styles.desktopHistorySection]}>
+              <Text style={styles.sectionTitle}>{t('progress.history')}</Text>
+              {history.length > 0 ? (
+                <View style={styles.historyCard}>
+                  {history.map((log) => (
+                    <WorkoutHistoryItem
+                      key={log.id}
+                      name={log.workout_name}
+                      date={formatDate(log.date)}
+                      duration={formatDuration(log.duration_seconds)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="barbell-outline" size={40} color={Colors.textMuted} />
+                  <Text style={styles.emptyText}>
+                    Все още няма тренировки.{'\n'}Започни първата си днес!
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={{ height: Spacing.xl }} />
+        </ResponsiveContainer>
       </ScrollView>
     </SafeAreaView>
   );
@@ -318,5 +326,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  desktopHistoryRow: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+  },
+  desktopHistorySection: {
+    flex: 1,
   },
 });

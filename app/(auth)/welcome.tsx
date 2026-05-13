@@ -3,13 +3,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const breakpoint = useBreakpoint();
+  const isWide = breakpoint !== 'sm';
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <View style={[styles.content, isWide && styles.contentWide]}>
         <View style={styles.heroSection}>
           <View style={styles.iconContainer}>
             <Ionicons name="barbell" size={64} color={Colors.primary} />
@@ -67,6 +70,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     justifyContent: 'space-between',
     paddingBottom: Spacing.xl,
+  },
+  contentWide: {
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroSection: {
     alignItems: 'center',

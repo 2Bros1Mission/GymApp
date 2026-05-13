@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { t } from '../../src/constants/i18n';
 import { sampleWorkouts } from '../../src/data/workouts';
+import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 
 export default function WorkoutDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +29,7 @@ export default function WorkoutDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ResponsiveContainer maxWidth={720}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
@@ -103,6 +105,7 @@ export default function WorkoutDetailScreen() {
           <Text style={styles.startButtonText}>{t('workouts.start')}</Text>
         </Pressable>
       </View>
+      </ResponsiveContainer>
     </SafeAreaView>
   );
 }

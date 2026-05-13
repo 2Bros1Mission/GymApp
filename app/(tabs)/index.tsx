@@ -8,6 +8,8 @@ import { t } from '../../src/constants/i18n';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats } from '../../src/lib/workoutService';
+import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
+import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 function StatCard({ icon, label, value, color }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -48,77 +50,88 @@ export default function HomeScreen() {
 
   const displayName = profile?.name || 'Атлет';
 
+  const breakpoint = useBreakpoint();
+  const isLarge = breakpoint === 'lg';
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>{t('home.greeting')},</Text>
-            <Text style={styles.userName}>{displayName} 💪</Text>
+        <ResponsiveContainer>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>{t('home.greeting')},</Text>
+              <Text style={styles.userName}>{displayName} 💪</Text>
+            </View>
+            <Pressable style={styles.notificationBtn}>
+              <Ionicons name="notifications-outline" size={24} color={Colors.text} />
+            </Pressable>
           </View>
-          <Pressable style={styles.notificationBtn}>
-            <Ionicons name="notifications-outline" size={24} color={Colors.text} />
-          </Pressable>
-        </View>
 
-        <View style={styles.todayCard}>
-          <View style={styles.todayHeader}>
-            <Text style={styles.todayTitle}>{t('home.todayWorkout')}</Text>
-            <View style={styles.difficultyBadge}>
-              <Text style={styles.difficultyText}>
-                {t(`difficulty.${todayWorkout.difficulty}`)}
-              </Text>
+          <View style={isLarge ? styles.desktopRow : undefined}>
+            <View style={isLarge ? styles.desktopMain : undefined}>
+              <View style={styles.todayCard}>
+                <View style={styles.todayHeader}>
+                  <Text style={styles.todayTitle}>{t('home.todayWorkout')}</Text>
+                  <View style={styles.difficultyBadge}>
+                    <Text style={styles.difficultyText}>
+                      {t(`difficulty.${todayWorkout.difficulty}`)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.workoutName}>
+                  {language === 'bg' ? todayWorkout.nameBg : todayWorkout.name}
+                </Text>
+                <Text style={styles.workoutMeta}>
+                  {todayWorkout.exercises.length} {t('workouts.exercises')} · {todayWorkout.durationMinutes} {t('workouts.minutes')}
+                </Text>
+                <Pressable
+                  style={styles.startButton}
+                  onPress={() => router.push(`/workout/${todayWorkout.id}`)}
+                >
+                  <Ionicons name="play" size={20} color={Colors.white} />
+                  <Text style={styles.startButtonText}>{t('home.startWorkout')}</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.sectionTitle}>{t('home.goals')}</Text>
+              <View style={styles.goalCard}>
+                <View style={styles.goalRow}>
+                  <Text style={styles.goalText}>Тренировки тази седмица</Text>
+                  <Text style={styles.goalProgress}>{stats.thisWeek}/5</Text>
+                </View>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, { width: `${Math.min((stats.thisWeek / 5) * 100, 100)}%` }]} />
+                </View>
+              </View>
+            </View>
+
+            <View style={isLarge ? styles.desktopSide : undefined}>
+              <Text style={styles.sectionTitle}>{t('home.quickStats')}</Text>
+              <View style={[styles.statsRow, isLarge && styles.statsRowDesktop]}>
+                <StatCard
+                  icon="flame"
+                  label={t('home.streak')}
+                  value={`${stats.streak} ${t('home.days')}`}
+                  color={Colors.accent}
+                />
+                <StatCard
+                  icon="calendar"
+                  label={t('home.thisWeek')}
+                  value={`${stats.thisWeek}/5`}
+                  color={Colors.primary}
+                />
+                <StatCard
+                  icon="trophy"
+                  label={t('home.totalWorkouts')}
+                  value={`${stats.totalWorkouts}`}
+                  color={Colors.success}
+                />
+              </View>
             </View>
           </View>
-          <Text style={styles.workoutName}>
-            {language === 'bg' ? todayWorkout.nameBg : todayWorkout.name}
-          </Text>
-          <Text style={styles.workoutMeta}>
-            {todayWorkout.exercises.length} {t('workouts.exercises')} · {todayWorkout.durationMinutes} {t('workouts.minutes')}
-          </Text>
-          <Pressable
-            style={styles.startButton}
-            onPress={() => router.push(`/workout/${todayWorkout.id}`)}
-          >
-            <Ionicons name="play" size={20} color={Colors.white} />
-            <Text style={styles.startButtonText}>{t('home.startWorkout')}</Text>
-          </Pressable>
-        </View>
 
-        <Text style={styles.sectionTitle}>{t('home.quickStats')}</Text>
-        <View style={styles.statsRow}>
-          <StatCard
-            icon="flame"
-            label={t('home.streak')}
-            value={`${stats.streak} ${t('home.days')}`}
-            color={Colors.accent}
-          />
-          <StatCard
-            icon="calendar"
-            label={t('home.thisWeek')}
-            value={`${stats.thisWeek}/5`}
-            color={Colors.primary}
-          />
-          <StatCard
-            icon="trophy"
-            label={t('home.totalWorkouts')}
-            value={`${stats.totalWorkouts}`}
-            color={Colors.success}
-          />
-        </View>
-
-        <Text style={styles.sectionTitle}>{t('home.goals')}</Text>
-        <View style={styles.goalCard}>
-          <View style={styles.goalRow}>
-            <Text style={styles.goalText}>Тренировки тази седмица</Text>
-            <Text style={styles.goalProgress}>{stats.thisWeek}/5</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${Math.min((stats.thisWeek / 5) * 100, 100)}%` }]} />
-          </View>
-        </View>
-
-        <View style={{ height: Spacing.xl }} />
+          <View style={{ height: Spacing.xl }} />
+        </ResponsiveContainer>
       </ScrollView>
     </SafeAreaView>
   );
@@ -277,5 +290,20 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.full,
+  },
+  desktopRow: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+  },
+  desktopMain: {
+    flex: 2,
+  },
+  desktopSide: {
+    flex: 1,
+  },
+  statsRowDesktop: {
+    flexDirection: 'column',
+    paddingHorizontal: 0,
   },
 });
