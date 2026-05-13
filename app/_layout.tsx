@@ -92,6 +92,14 @@ function RootLayoutNav() {
           name="edit-profile"
           options={{ animation: 'slide_from_right' }}
         />
+        <Stack.Screen
+          name="help"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="terms"
+          options={{ animation: 'slide_from_right' }}
+        />
       </Stack>
       <OfflineBanner />
     </>
