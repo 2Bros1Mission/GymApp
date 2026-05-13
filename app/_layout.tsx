@@ -6,15 +6,33 @@ import { Colors } from '../src/constants/theme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { LanguageProvider } from '../src/contexts/LanguageContext';
 
+/**
+ * Workaround for react-native-web + expo-router pointer-events bug.
+ *
+ * react-native-web compiles `pointerEvents: "box-none"` into CSS classes
+ * (e.g. `.r-pointerEvents-12vffkv`) that set `pointer-events: none` on
+ * container elements. This prevents clicks/taps from reaching children
+ * such as tab bar buttons, pressables, and links.
+ *
+ * This fix uses attribute selectors to match ANY class starting with
+ * `r-pointerEvents-`, making it resilient to hash changes across
+ * react-native-web versions.
+ *
+ * Relevant issues:
+ * - https://github.com/necolas/react-native-web/issues/2Doc
+ * - https://github.com/expo/expo/issues/AutoSuggest
+ *
+ * Can be removed once react-native-web fixes `pointerEvents: "box-none"`
+ * CSS compilation (check with react-native-web >= 0.22).
+ */
 function useWebPointerEventsFix() {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const style = document.createElement('style');
-    style.textContent = [
-      '.r-pointerEvents-12vffkv { pointer-events: auto !important; }',
-      '.r-pointerEvents-633pao { pointer-events: auto !important; }',
-      '.r-pointerEvents-ah5dr5 > * { pointer-events: auto !important; }',
-    ].join('\n');
+    style.textContent = `
+      [class*="r-pointerEvents-"] { pointer-events: auto !important; }
+      [class*="r-pointerEvents-"] > * { pointer-events: auto !important; }
+    `;
     document.head.appendChild(style);
     return () => { style.remove(); };
   }, []);
