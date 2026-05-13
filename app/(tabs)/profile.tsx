@@ -1,11 +1,17 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
+import {
+  getNotificationPreferences,
+  toggleNotifications,
+  updateReminderTime,
+  addNotificationResponseListener,
+} from '../../src/lib/notificationService';
 
 function ProfileMenuItem({ icon, label, value, onPress, danger }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -38,6 +44,62 @@ export default function ProfileScreen() {
   const { profile, signOut } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [reminderHour, setReminderHour] = useState(9);
+  const [reminderMinute, setReminderMinute] = useState(0);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+
+  // Load notification preferences on mount
+  useEffect(() => {
+    getNotificationPreferences().then((prefs) => {
+      setNotificationsEnabled(prefs.enabled);
+      setReminderHour(prefs.reminderHour);
+      setReminderMinute(prefs.reminderMinute);
+    });
+  }, []);
+
+  // Listen for notification taps
+  useEffect(() => {
+    const cleanup = addNotificationResponseListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.type === 'workout-reminder') {
+        // Future: navigate to workout screen
+        console.log('Workout reminder tapped');
+      }
+    });
+    return cleanup;
+  }, []);
+
+  const handleToggleNotifications = useCallback(async () => {
+    const newEnabled = !notificationsEnabled;
+    const result = await toggleNotifications(
+      newEnabled,
+      t('notifications.reminderTitle'),
+      t('notifications.reminderBody')
+    );
+
+    setNotificationsEnabled(result.enabled);
+
+    if (result.permissionDenied) {
+      if (Platform.OS === 'web') {
+        // Can't show Alert on web, just ignore
+      } else {
+        Alert.alert(t('profile.notifications'), t('profile.permissionDenied'));
+      }
+    }
+  }, [notificationsEnabled, t]);
+
+  const handleSetReminderTime = useCallback(async (hour: number, minute: number) => {
+    setReminderHour(hour);
+    setReminderMinute(minute);
+    setShowReminderModal(false);
+    await updateReminderTime(
+      hour,
+      minute,
+      t('notifications.reminderTitle'),
+      t('notifications.reminderBody')
+    );
+  }, [t]);
 
   const handleSignOut = () => {
     if (Platform.OS === 'web') {
@@ -129,7 +191,20 @@ export default function ProfileScreen() {
             <ProfileMenuItem
               icon="notifications-outline"
               label={t('profile.notifications')}
+              value={notificationsEnabled ? t('profile.notificationsOn') : t('profile.notificationsOff')}
+              onPress={handleToggleNotifications}
             />
+            {notificationsEnabled && (
+              <>
+                <View style={styles.menuDivider} />
+                <ProfileMenuItem
+                  icon="time-outline"
+                  label={t('profile.reminderTime')}
+                  value={`${String(reminderHour).padStart(2, '0')}:${String(reminderMinute).padStart(2, '0')}`}
+                  onPress={() => setShowReminderModal(true)}
+                />
+              </>
+            )}
             <View style={styles.menuDivider} />
             <ProfileMenuItem
               icon="moon-outline"
@@ -164,6 +239,46 @@ export default function ProfileScreen() {
         <View style={{ height: Spacing.xl }} />
         </ResponsiveContainer>
       </ScrollView>
+
+      <Modal
+        visible={showReminderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReminderModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowReminderModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('profile.reminderTime')}</Text>
+            <View style={styles.timePickerGrid}>
+              {[6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].map((hour) => (
+                <Pressable
+                  key={hour}
+                  style={[
+                    styles.timeOption,
+                    hour === reminderHour && styles.timeOptionActive,
+                  ]}
+                  onPress={() => handleSetReminderTime(hour, 0)}
+                >
+                  <Text
+                    style={[
+                      styles.timeOptionText,
+                      hour === reminderHour && styles.timeOptionTextActive,
+                    ]}
+                  >
+                    {`${String(hour).padStart(2, '0')}:00`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              style={styles.modalBtnCancel}
+              onPress={() => setShowReminderModal(false)}
+            >
+              <Text style={styles.modalBtnCancelText}>{t('common.close')}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={showLogoutModal}
@@ -399,6 +514,31 @@ const styles = StyleSheet.create({
   modalBtnConfirmText: {
     fontSize: FontSize.md,
     fontWeight: '700',
+    color: Colors.white,
+  },
+  timePickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  timeOption: {
+    width: '22%',
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    flexGrow: 1,
+  },
+  timeOptionActive: {
+    backgroundColor: Colors.primary,
+  },
+  timeOptionText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  timeOptionTextActive: {
     color: Colors.white,
   },
 });
