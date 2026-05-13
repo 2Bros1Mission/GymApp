@@ -26,7 +26,15 @@
       "package": "com.gymapp.mobile"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "GymApp",
+      "shortName": "GymApp",
+      "description": "Твоят личен фитнес партньор — тренировки, прогрес и връзка с треньори.",
+      "themeColor": "#4F46E5",
+      "backgroundColor": "#0F0F1A",
+      "lang": "bg"
     },
     "plugins": [
       "expo-router",
