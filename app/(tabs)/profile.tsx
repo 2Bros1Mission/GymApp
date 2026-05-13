@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -41,6 +42,7 @@ function ProfileMenuItem({ icon, label, value, onPress, danger }: {
 }
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { profile, signOut } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -162,6 +164,7 @@ export default function ProfileScreen() {
             <ProfileMenuItem
               icon="person-outline"
               label={t('profile.editProfile')}
+              onPress={() => router.push('/edit-profile')}
             />
             <View style={styles.menuDivider} />
             <ProfileMenuItem
