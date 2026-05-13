@@ -22,15 +22,60 @@ export default function SignupScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  // Inline validation errors
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const validateName = (value: string): string => {
+    if (!value.trim()) return t('auth.nameRequired');
+    if (value.trim().length > 50) return t('auth.nameTooLong');
+    return '';
+  };
+
+  const validateEmail = (value: string): string => {
+    if (!value.trim()) return t('auth.invalidEmail');
+    if (!EMAIL_REGEX.test(value.trim())) return t('auth.invalidEmail');
+    return '';
+  };
+
+  const validatePassword = (value: string): string => {
+    if (!value) return t('auth.passwordRequired');
+    if (value.length < 6) return t('auth.passwordMinLength');
+    return '';
+  };
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    if (nameError) setNameError('');
+    if (error) setError('');
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (emailError) setEmailError('');
+    if (error) setError('');
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (passwordError) setPasswordError('');
+    if (error) setError('');
+  };
+
+  const isFormValid = name.trim() !== '' && email.trim() !== '' && password.trim() !== '';
+
   const handleSignup = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError(t('common.fillAllFields'));
-      return;
-    }
-    if (password.length < 6) {
-      setError(t('auth.passwordMinLength'));
-      return;
-    }
+    const nErr = validateName(name);
+    const eErr = validateEmail(email);
+    const pErr = validatePassword(password);
+    setNameError(nErr);
+    setEmailError(eErr);
+    setPasswordError(pErr);
+
+    if (nErr || eErr || pErr) return;
 
     setLoading(true);
     setError('');
@@ -113,50 +158,63 @@ export default function SignupScreen() {
           </View>
 
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('auth.name')}
-                placeholderTextColor={Colors.textMuted}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('auth.email')}
-                placeholderTextColor={Colors.textMuted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('auth.password')}
-                placeholderTextColor={Colors.textMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <Pressable onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={Colors.textMuted}
+            <View>
+              <View style={[styles.inputContainer, nameError ? styles.inputContainerError : undefined]}>
+                <Ionicons name="person-outline" size={20} color={nameError ? Colors.error : Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.name')}
+                  placeholderTextColor={Colors.textMuted}
+                  value={name}
+                  onChangeText={handleNameChange}
+                  onBlur={() => { if (name.trim()) setNameError(validateName(name)); }}
+                  autoCapitalize="words"
+                  maxLength={50}
                 />
-              </Pressable>
+              </View>
+              {nameError !== '' && <Text style={styles.fieldError}>{nameError}</Text>}
+            </View>
+
+            <View>
+              <View style={[styles.inputContainer, emailError ? styles.inputContainerError : undefined]}>
+                <Ionicons name="mail-outline" size={20} color={emailError ? Colors.error : Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.email')}
+                  placeholderTextColor={Colors.textMuted}
+                  value={email}
+                  onChangeText={handleEmailChange}
+                  onBlur={() => { if (email.trim()) setEmailError(validateEmail(email)); }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              {emailError !== '' && <Text style={styles.fieldError}>{emailError}</Text>}
+            </View>
+
+            <View>
+              <View style={[styles.inputContainer, passwordError ? styles.inputContainerError : undefined]}>
+                <Ionicons name="lock-closed-outline" size={20} color={passwordError ? Colors.error : Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.password')}
+                  placeholderTextColor={Colors.textMuted}
+                  value={password}
+                  onChangeText={handlePasswordChange}
+                  onBlur={() => { if (password) setPasswordError(validatePassword(password)); }}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <Pressable onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={Colors.textMuted}
+                  />
+                </Pressable>
+              </View>
+              {passwordError !== '' && <Text style={styles.fieldError}>{passwordError}</Text>}
             </View>
 
             {error !== '' && (
@@ -167,9 +225,9 @@ export default function SignupScreen() {
             )}
 
             <Pressable
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (loading || !isFormValid) && styles.submitButtonDisabled]}
               onPress={handleSignup}
-              disabled={loading}
+              disabled={loading || !isFormValid}
             >
               {loading ? (
                 <ActivityIndicator color={Colors.white} />
@@ -273,6 +331,15 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  inputContainerError: {
+    borderColor: Colors.error,
+  },
+  fieldError: {
+    fontSize: FontSize.xs,
+    color: Colors.error,
+    marginTop: 4,
+    marginLeft: Spacing.md,
   },
   input: {
     flex: 1,

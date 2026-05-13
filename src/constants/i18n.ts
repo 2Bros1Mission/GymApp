@@ -136,6 +136,10 @@ export const translations: Translations = {
     'auth.checkEmail': 'Провери имейла си!',
     'auth.confirmationSent': 'Изпратихме линк за потвърждение на {email}. Натисни го, за да активираш акаунта си.',
     'auth.goToLogin': 'Към вход',
+    'auth.invalidEmail': 'Въведи валиден имейл адрес',
+    'auth.nameRequired': 'Името е задължително',
+    'auth.nameTooLong': 'Името трябва да е под 50 символа',
+    'auth.passwordRequired': 'Паролата е задължителна',
 
     'muscle.chest': 'Гърди',
     'muscle.back': 'Гръб',
@@ -285,6 +289,10 @@ export const translations: Translations = {
     'auth.checkEmail': 'Check your email!',
     'auth.confirmationSent': 'We sent a confirmation link to {email}. Click it to activate your account.',
     'auth.goToLogin': 'Go to Login',
+    'auth.invalidEmail': 'Please enter a valid email address',
+    'auth.nameRequired': 'Name is required',
+    'auth.nameTooLong': 'Name must be under 50 characters',
+    'auth.passwordRequired': 'Password is required',
 
     'muscle.chest': 'Chest',
     'muscle.back': 'Back',
