@@ -37,12 +37,23 @@ export default function HomeScreen() {
     streak: 0,
     thisWeek: 0,
   });
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const loadStats = useCallback(async () => {
     if (!user) return;
-    const s = await getWorkoutStats(user.id);
-    setStats(s);
-  }, [user]);
+    setStatsLoading(true);
+    setStatsError(null);
+    try {
+      const s = await getWorkoutStats(user.id);
+      setStats(s);
+    } catch (err) {
+      console.error('Failed to load stats:', err);
+      setStatsError(err instanceof Error ? err.message : t('home.statsError'));
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [user, t]);
 
   useEffect(() => {
     loadStats();
@@ -66,6 +77,24 @@ export default function HomeScreen() {
               <Ionicons name="notifications-outline" size={24} color={Colors.text} />
             </Pressable>
           </View>
+
+          {statsError && (
+            <View style={styles.errorCard}>
+              <View style={styles.errorCardContent}>
+                <Ionicons name="cloud-offline-outline" size={24} color={Colors.error} />
+                <View style={styles.errorCardText}>
+                  <Text style={styles.errorCardTitle}>{t('home.statsError')}</Text>
+                  <Text style={styles.errorCardMessage}>{statsError}</Text>
+                </View>
+              </View>
+              <Pressable style={styles.retryBtn} onPress={loadStats} disabled={statsLoading}>
+                <Ionicons name="refresh" size={18} color={Colors.white} />
+                <Text style={styles.retryBtnText}>
+                  {statsLoading ? t('common.loading') : t('home.retry')}
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
           <View style={isLarge ? styles.desktopRow : undefined}>
             <View style={isLarge ? styles.desktopMain : undefined}>
@@ -290,6 +319,48 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: Colors.primary,
     borderRadius: BorderRadius.full,
+  },
+  errorCard: {
+    marginHorizontal: Spacing.lg,
+    backgroundColor: Colors.error + '12',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.error + '25',
+  },
+  errorCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  errorCardText: {
+    flex: 1,
+  },
+  errorCardTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.error,
+    marginBottom: 2,
+  },
+  errorCardMessage: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    backgroundColor: Colors.error,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: Spacing.sm,
+  },
+  retryBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.white,
   },
   desktopRow: {
     flexDirection: 'row',

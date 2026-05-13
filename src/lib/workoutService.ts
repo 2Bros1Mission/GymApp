@@ -70,12 +70,17 @@ export async function getWorkoutHistory(userId: string, limit = 20) {
 }
 
 export async function getWorkoutStats(userId: string) {
-  const { data: allLogs } = await supabase
+  const { data: allLogs, error } = await supabase
     .from('workout_logs')
     .select('id, date, duration_seconds')
     .eq('user_id', userId)
     .eq('completed', true)
     .order('date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching workout stats:', error);
+    throw new Error(error.message);
+  }
 
   if (!allLogs || allLogs.length === 0) {
     return { totalWorkouts: 0, streak: 0, thisWeek: 0, weekDays: [] as boolean[] };
