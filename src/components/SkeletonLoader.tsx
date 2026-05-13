@@ -1,6 +1,7 @@
 import { View, StyleSheet, Animated } from 'react-native';
 import { useEffect, useRef } from 'react';
-import { Colors, BorderRadius, Spacing } from '../constants/theme';
+import { BorderRadius, Spacing } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SkeletonBoxProps {
   width?: number | string;
@@ -10,6 +11,7 @@ interface SkeletonBoxProps {
 }
 
 export function SkeletonBox({ width = '100%', height = 16, borderRadius = BorderRadius.sm, style }: SkeletonBoxProps) {
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function SkeletonBox({ width = '100%', height = 16, borderRadius = Border
           width: width as any,
           height,
           borderRadius,
-          backgroundColor: Colors.surfaceLight,
+          backgroundColor: colors.surfaceLight,
           opacity,
         },
         style,
@@ -41,8 +43,9 @@ export function SkeletonBox({ width = '100%', height = 16, borderRadius = Border
 
 /** Skeleton card that mimics a stat card */
 export function SkeletonStatCard() {
+  const { colors } = useTheme();
   return (
-    <View style={skeletonStyles.statCard}>
+    <View style={[skeletonStyles.statCard, { backgroundColor: colors.surface, borderLeftColor: colors.surfaceLight }]}>
       <SkeletonBox width={20} height={20} borderRadius={10} />
       <SkeletonBox width={60} height={24} style={{ marginTop: Spacing.sm }} />
       <SkeletonBox width={40} height={12} style={{ marginTop: 4 }} />
@@ -52,8 +55,9 @@ export function SkeletonStatCard() {
 
 /** Skeleton card that mimics a workout list item */
 export function SkeletonWorkoutCard() {
+  const { colors } = useTheme();
   return (
-    <View style={skeletonStyles.workoutCard}>
+    <View style={[skeletonStyles.workoutCard, { backgroundColor: colors.surface }]}>
       <SkeletonBox width={48} height={48} borderRadius={24} />
       <View style={skeletonStyles.workoutCardInfo}>
         <SkeletonBox width="70%" height={16} />
@@ -66,8 +70,9 @@ export function SkeletonWorkoutCard() {
 
 /** Skeleton for the weekly calendar section */
 export function SkeletonWeekCalendar() {
+  const { colors } = useTheme();
   return (
-    <View style={skeletonStyles.weekCard}>
+    <View style={[skeletonStyles.weekCard, { backgroundColor: colors.surface }]}>
       <View style={skeletonStyles.weekRow}>
         {Array.from({ length: 7 }).map((_, i) => (
           <View key={i} style={skeletonStyles.dayCol}>
@@ -98,17 +103,14 @@ export function SkeletonHistoryItem() {
 const skeletonStyles = StyleSheet.create({
   statCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     alignItems: 'center',
     borderLeftWidth: 3,
-    borderLeftColor: Colors.surfaceLight,
   },
   workoutCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
@@ -118,7 +120,6 @@ const skeletonStyles = StyleSheet.create({
     flex: 1,
   },
   weekCard: {
-    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
   },

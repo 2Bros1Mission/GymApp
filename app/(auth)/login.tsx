@@ -2,12 +2,13 @@ import { View, Text, StyleSheet, Pressable, TextInput, KeyboardAvoidingView, Pla
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useState, useMemo } from 'react';
+import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { supabase } from '../../src/lib/supabase';
+import { useTheme } from '../../src/contexts/ThemeContext';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -97,6 +98,8 @@ export default function LoginScreen() {
 
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -110,12 +113,12 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </Pressable>
 
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <Ionicons name="barbell" size={40} color={Colors.primary} />
+              <Ionicons name="barbell" size={40} color={colors.primary} />
             </View>
             <Text style={styles.title}>{t('auth.loginTitle')}</Text>
             <Text style={styles.subtitle}>{t('auth.loginSubtitle')}</Text>
@@ -124,11 +127,11 @@ export default function LoginScreen() {
           <View style={styles.form}>
             <View>
               <View style={[styles.inputContainer, emailError ? styles.inputContainerError : undefined]}>
-                <Ionicons name="mail-outline" size={20} color={emailError ? Colors.error : Colors.textMuted} />
+                <Ionicons name="mail-outline" size={20} color={emailError ? colors.error : colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   placeholder={t('auth.email')}
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={handleEmailChange}
                   onBlur={() => { if (email.trim()) setEmailError(validateEmail(email)); }}
@@ -142,11 +145,11 @@ export default function LoginScreen() {
 
             <View>
               <View style={[styles.inputContainer, passwordError ? styles.inputContainerError : undefined]}>
-                <Ionicons name="lock-closed-outline" size={20} color={passwordError ? Colors.error : Colors.textMuted} />
+                <Ionicons name="lock-closed-outline" size={20} color={passwordError ? colors.error : colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   placeholder={t('auth.password')}
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={handlePasswordChange}
                   onBlur={() => { if (password) setPasswordError(validatePassword(password)); }}
@@ -157,7 +160,7 @@ export default function LoginScreen() {
                   <Ionicons
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color={Colors.textMuted}
+                    color={colors.textMuted}
                   />
                 </Pressable>
               </View>
@@ -172,14 +175,14 @@ export default function LoginScreen() {
 
             {resetSent && (
               <View style={styles.successBox}>
-                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                 <Text style={styles.successText}>{t('auth.resetEmailSent')}</Text>
               </View>
             )}
 
             {error !== '' && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={18} color={Colors.error} />
+                <Ionicons name="alert-circle" size={18} color={colors.error} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -190,7 +193,7 @@ export default function LoginScreen() {
               disabled={loading || !isFormValid}
             >
               {loading ? (
-                <ActivityIndicator color={Colors.white} />
+                <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={styles.submitButtonText}>{t('auth.login')}</Text>
               )}
@@ -212,10 +215,10 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingHorizontal: Spacing.xl,
@@ -230,7 +233,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.md,
@@ -244,7 +247,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.primaryDark + '30',
+    backgroundColor: colors.primaryDark + '30',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
@@ -252,11 +255,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.xxxl,
     fontWeight: '800',
-    color: Colors.text,
+    color: colors.text,
   },
   subtitle: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: Spacing.xs,
   },
   form: {
@@ -265,27 +268,27 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     gap: Spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   inputContainerError: {
-    borderColor: Colors.error,
+    borderColor: colors.error,
   },
   fieldError: {
     fontSize: FontSize.xs,
-    color: Colors.error,
+    color: colors.error,
     marginTop: 4,
     marginLeft: Spacing.md,
   },
   input: {
     flex: 1,
     fontSize: FontSize.md,
-    color: Colors.text,
+    color: colors.text,
     paddingVertical: Spacing.sm,
   },
   forgotPassword: {
@@ -293,37 +296,37 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
+    color: colors.primary,
     fontWeight: '600',
   },
   successBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.success + '15',
+    backgroundColor: colors.success + '15',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
   },
   successText: {
     fontSize: FontSize.sm,
-    color: Colors.success,
+    color: colors.success,
     flex: 1,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.error + '15',
+    backgroundColor: colors.error + '15',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
   },
   errorText: {
     fontSize: FontSize.sm,
-    color: Colors.error,
+    color: colors.error,
     flex: 1,
   },
   submitButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md + 2,
     alignItems: 'center',
@@ -335,7 +338,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: FontSize.lg,
     fontWeight: '700',
-    color: Colors.white,
+    color: colors.white,
   },
   switchAuth: {
     alignItems: 'center',
@@ -343,10 +346,10 @@ const styles = StyleSheet.create({
   },
   switchAuthText: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   switchAuthLink: {
-    color: Colors.primary,
+    color: colors.primary,
     fontWeight: '700',
   },
 });

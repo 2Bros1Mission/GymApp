@@ -1,10 +1,11 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSize } from '../../src/constants/theme';
+import { FontSize } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { Sidebar, SIDEBAR_WIDTH } from '../../src/components/Sidebar';
+import { useTheme } from '../../src/contexts/ThemeContext';
 
 type TabIcon = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -12,6 +13,7 @@ export default function TabLayout() {
   const { t } = useTranslation();
   const breakpoint = useBreakpoint();
   const isDesktop = breakpoint === 'lg';
+  const { colors } = useTheme();
 
   return (
     <View style={styles.root}>
@@ -23,15 +25,15 @@ export default function TabLayout() {
             tabBarStyle: isDesktop
               ? { display: 'none' }
               : {
-                  backgroundColor: Colors.surface,
-                  borderTopColor: Colors.border,
+                  backgroundColor: colors.surface,
+                  borderTopColor: colors.border,
                   borderTopWidth: 1,
                   height: 85,
                   paddingBottom: 25,
                   paddingTop: 8,
                 },
-            tabBarActiveTintColor: Colors.primary,
-            tabBarInactiveTintColor: Colors.textMuted,
+            tabBarActiveTintColor: colors.primary,
+            tabBarInactiveTintColor: colors.textMuted,
             tabBarLabelStyle: {
               fontSize: FontSize.xs,
               fontWeight: '600',

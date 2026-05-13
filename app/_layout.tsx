@@ -2,10 +2,10 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
-import { Colors } from '../src/constants/theme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { LanguageProvider } from '../src/contexts/LanguageContext';
 import { NetworkProvider } from '../src/contexts/NetworkContext';
+import { ThemeProvider, useTheme } from '../src/contexts/ThemeContext';
 import { OfflineBanner } from '../src/components/OfflineBanner';
 
 /**
@@ -44,6 +44,7 @@ function RootLayoutNav() {
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const { isDark, colors } = useTheme();
 
   useWebPointerEventsFix();
 
@@ -61,19 +62,19 @@ function RootLayoutNav() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.background },
+          contentStyle: { backgroundColor: colors.background },
           animation: 'slide_from_right',
         }}
       >
@@ -99,12 +100,14 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <NetworkProvider>
-      <AuthProvider>
-        <LanguageProvider>
-          <RootLayoutNav />
-        </LanguageProvider>
-      </AuthProvider>
-    </NetworkProvider>
+    <ThemeProvider>
+      <NetworkProvider>
+        <AuthProvider>
+          <LanguageProvider>
+            <RootLayoutNav />
+          </LanguageProvider>
+        </AuthProvider>
+      </NetworkProvider>
+    </ThemeProvider>
   );
 }

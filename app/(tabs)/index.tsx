@@ -2,8 +2,9 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState, useCallback } from 'react';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -12,12 +13,82 @@ import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { SkeletonStatCard, SkeletonBox } from '../../src/components/SkeletonLoader';
 
-function StatCard({ icon, label, value, color }: {
+const makeStyles = (colors: ColorPalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.lg,
+  },
+  greeting: { fontSize: FontSize.md, color: colors.textSecondary },
+  userName: { fontSize: FontSize.xxl, fontWeight: '700', color: colors.text, marginTop: 2 },
+  notificationBtn: {
+    width: 44, height: 44, borderRadius: BorderRadius.full,
+    backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
+  },
+  todayCard: {
+    marginHorizontal: Spacing.lg, backgroundColor: colors.surface,
+    borderRadius: BorderRadius.lg, padding: Spacing.lg,
+    borderLeftWidth: 4, borderLeftColor: colors.primary,
+  },
+  todayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  todayTitle: { fontSize: FontSize.sm, color: colors.textSecondary, textTransform: 'uppercase', fontWeight: '600', letterSpacing: 1 },
+  difficultyBadge: { backgroundColor: colors.primaryDark, paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: BorderRadius.sm },
+  difficultyText: { fontSize: FontSize.xs, color: colors.primaryLight, fontWeight: '600' },
+  workoutName: { fontSize: FontSize.xl, fontWeight: '700', color: colors.text, marginBottom: Spacing.xs },
+  workoutMeta: { fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: Spacing.lg },
+  startButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primary, borderRadius: BorderRadius.md, paddingVertical: Spacing.md, gap: Spacing.sm,
+  },
+  startButtonText: { fontSize: FontSize.md, fontWeight: '700', color: colors.white },
+  sectionTitle: {
+    fontSize: FontSize.lg, fontWeight: '700', color: colors.text,
+    marginTop: Spacing.xl, marginBottom: Spacing.md, paddingHorizontal: Spacing.lg,
+  },
+  statsRow: { flexDirection: 'row', paddingHorizontal: Spacing.lg, gap: Spacing.sm },
+  statCard: {
+    flex: 1, backgroundColor: colors.surface, borderRadius: BorderRadius.md,
+    padding: Spacing.md, alignItems: 'center', borderLeftWidth: 3,
+  },
+  statValue: { fontSize: FontSize.lg, fontWeight: '700', color: colors.text, marginTop: Spacing.sm },
+  statLabel: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  goalCard: {
+    marginHorizontal: Spacing.lg, backgroundColor: colors.surface,
+    borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm,
+  },
+  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  goalText: { fontSize: FontSize.sm, color: colors.text, fontWeight: '500' },
+  goalProgress: { fontSize: FontSize.sm, color: colors.primary, fontWeight: '700' },
+  progressBar: { height: 6, backgroundColor: colors.surfaceLight, borderRadius: BorderRadius.full, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: BorderRadius.full },
+  errorCard: {
+    marginHorizontal: Spacing.lg, backgroundColor: colors.error + '12',
+    borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: colors.error + '25',
+  },
+  errorCardContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
+  errorCardText: { flex: 1 },
+  errorCardTitle: { fontSize: FontSize.sm, fontWeight: '700', color: colors.error, marginBottom: 2 },
+  errorCardMessage: { fontSize: FontSize.xs, color: colors.textSecondary },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.xs, backgroundColor: colors.error, borderRadius: BorderRadius.sm, paddingVertical: Spacing.sm,
+  },
+  retryBtnText: { fontSize: FontSize.sm, fontWeight: '700', color: colors.white },
+  desktopRow: { flexDirection: 'row', gap: Spacing.lg, paddingHorizontal: Spacing.lg },
+  desktopMain: { flex: 2 },
+  desktopSide: { flex: 1 },
+  statsRowDesktop: { flexDirection: 'column', paddingHorizontal: 0 },
+});
+
+function StatCard({ icon, label, value, color, colors }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   value: string;
   color: string;
+  colors: ColorPalette;
 }) {
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.statCard, { borderLeftColor: color }]}>
       <Ionicons name={icon} size={22} color={color} />
@@ -64,6 +135,8 @@ export default function HomeScreen() {
 
   const breakpoint = useBreakpoint();
   const isLarge = breakpoint === 'lg';
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -75,21 +148,21 @@ export default function HomeScreen() {
               <Text style={styles.userName}>{displayName} 💪</Text>
             </View>
             <Pressable style={styles.notificationBtn}>
-              <Ionicons name="notifications-outline" size={24} color={Colors.text} />
+              <Ionicons name="notifications-outline" size={24} color={colors.text} />
             </Pressable>
           </View>
 
           {statsError && (
             <View style={styles.errorCard}>
               <View style={styles.errorCardContent}>
-                <Ionicons name="cloud-offline-outline" size={24} color={Colors.error} />
+                <Ionicons name="cloud-offline-outline" size={24} color={colors.error} />
                 <View style={styles.errorCardText}>
                   <Text style={styles.errorCardTitle}>{t('home.statsError')}</Text>
                   <Text style={styles.errorCardMessage}>{statsError}</Text>
                 </View>
               </View>
               <Pressable style={styles.retryBtn} onPress={loadStats} disabled={statsLoading}>
-                <Ionicons name="refresh" size={18} color={Colors.white} />
+                <Ionicons name="refresh" size={18} color={colors.white} />
                 <Text style={styles.retryBtnText}>
                   {statsLoading ? t('common.loading') : t('home.retry')}
                 </Text>
@@ -118,7 +191,7 @@ export default function HomeScreen() {
                   style={styles.startButton}
                   onPress={() => router.push(`/workout/${todayWorkout.id}`)}
                 >
-                  <Ionicons name="play" size={20} color={Colors.white} />
+                  <Ionicons name="play" size={20} color={colors.white} />
                   <Text style={styles.startButtonText}>{t('home.startWorkout')}</Text>
                 </Pressable>
               </View>
@@ -155,19 +228,22 @@ export default function HomeScreen() {
                   icon="flame"
                   label={t('home.streak')}
                   value={`${stats.streak} ${t('home.days')}`}
-                  color={Colors.accent}
+                  color={colors.accent}
+                  colors={colors}
                 />
                 <StatCard
                   icon="calendar"
                   label={t('home.thisWeek')}
                   value={`${stats.thisWeek}/5`}
-                  color={Colors.primary}
+                  color={colors.primary}
+                  colors={colors}
                 />
                 <StatCard
                   icon="trophy"
                   label={t('home.totalWorkouts')}
                   value={`${stats.totalWorkouts}`}
-                  color={Colors.success}
+                  color={colors.success}
+                  colors={colors}
                 />
               </View>
               )}
@@ -180,216 +256,3 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.lg,
-  },
-  greeting: {
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-  },
-  userName: {
-    fontSize: FontSize.xxl,
-    fontWeight: '700',
-    color: Colors.text,
-    marginTop: 2,
-  },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  todayCard: {
-    marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-  },
-  todayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  todayTitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  difficultyBadge: {
-    backgroundColor: Colors.primaryDark,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
-  },
-  difficultyText: {
-    fontSize: FontSize.xs,
-    color: Colors.primaryLight,
-    fontWeight: '600',
-  },
-  workoutName: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  workoutMeta: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-  },
-  startButtonText: {
-    fontSize: FontSize.md,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.text,
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    alignItems: 'center',
-    borderLeftWidth: 3,
-  },
-  statValue: {
-    fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.text,
-    marginTop: Spacing.sm,
-  },
-  statLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  goalCard: {
-    marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  goalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  goalText: {
-    fontSize: FontSize.sm,
-    color: Colors.text,
-    fontWeight: '500',
-  },
-  goalProgress: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: Colors.surfaceLight,
-    borderRadius: BorderRadius.full,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.full,
-  },
-  errorCard: {
-    marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.error + '12',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.error + '25',
-  },
-  errorCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorCardText: {
-    flex: 1,
-  },
-  errorCardTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.error,
-    marginBottom: 2,
-  },
-  errorCardMessage: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-  },
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    backgroundColor: Colors.error,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm,
-  },
-  retryBtnText: {
-    fontSize: FontSize.sm,
-    fontWeight: '700',
-    color: Colors.white,
-  },
-  desktopRow: {
-    flexDirection: 'row',
-    gap: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-  },
-  desktopMain: {
-    flex: 2,
-  },
-  desktopSide: {
-    flex: 1,
-  },
-  statsRowDesktop: {
-    flexDirection: 'column',
-    paddingHorizontal: 0,
-  },
-});
