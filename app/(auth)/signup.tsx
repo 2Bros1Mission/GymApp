@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -43,6 +44,9 @@ export default function SignupScreen() {
     }
   };
 
+  const breakpoint = useBreakpoint();
+  const isWide = breakpoint !== 'sm';
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -51,7 +55,7 @@ export default function SignupScreen() {
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
           keyboardShouldPersistTaps="handled"
         >
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -198,6 +202,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xxl,
+  },
+  scrollContentWide: {
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   backBtn: {
     width: 44,

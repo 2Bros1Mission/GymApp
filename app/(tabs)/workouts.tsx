@@ -7,6 +7,8 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import { t } from '../../src/constants/i18n';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { DifficultyLevel, MuscleGroup, Workout } from '../../src/types';
+import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
+import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 const muscleGroupIcons: Record<MuscleGroup, React.ComponentProps<typeof Ionicons>['name']> = {
   chest: 'body',
@@ -68,6 +70,8 @@ function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: () => vo
 export default function WorkoutsScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>('all');
+  const breakpoint = useBreakpoint();
+  const numColumns = breakpoint === 'lg' ? 3 : breakpoint === 'md' ? 2 : 1;
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: t('workouts.all') },
@@ -82,41 +86,47 @@ export default function WorkoutsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('workouts.title')}</Text>
-      </View>
+      <ResponsiveContainer>
+        <View style={styles.header}>
+          <Text style={styles.title}>{t('workouts.title')}</Text>
+        </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterRow}
-        contentContainerStyle={styles.filterContent}
-      >
-        {filters.map((f) => (
-          <Pressable
-            key={f.key}
-            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
-            onPress={() => setFilter(f.key)}
-          >
-            <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
-              {f.label}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterRow}
+          contentContainerStyle={styles.filterContent}
+        >
+          {filters.map((f) => (
+            <Pressable
+              key={f.key}
+              style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+              onPress={() => setFilter(f.key)}
+            >
+              <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
+                {f.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
-      <FlatList
-        data={filteredWorkouts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <WorkoutCard
-            workout={item}
-            onPress={() => router.push(`/workout/${item.id}`)}
-          />
-        )}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+        <FlatList
+          data={filteredWorkouts}
+          keyExtractor={(item) => item.id}
+          key={`grid-${numColumns}`}
+          numColumns={numColumns}
+          renderItem={({ item }) => (
+            <View style={numColumns > 1 ? { flex: 1, maxWidth: `${100 / numColumns}%`, padding: Spacing.xs } : undefined}>
+              <WorkoutCard
+                workout={item}
+                onPress={() => router.push(`/workout/${item.id}`)}
+              />
+            </View>
+          )}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      </ResponsiveContainer>
     </SafeAreaView>
   );
 }

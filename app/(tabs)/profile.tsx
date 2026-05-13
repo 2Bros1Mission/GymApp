@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { t } from '../../src/constants/i18n';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 
 function ProfileMenuItem({ icon, label, value, onPress, danger }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -59,6 +60,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        <ResponsiveContainer maxWidth={600}>
         <View style={styles.header}>
           <Text style={styles.title}>{t('profile.title')}</Text>
         </View>
@@ -158,6 +160,7 @@ export default function ProfileScreen() {
 
         <Text style={styles.version}>GymApp v1.0.0</Text>
         <View style={{ height: Spacing.xl }} />
+        </ResponsiveContainer>
       </ScrollView>
 
       <Modal
