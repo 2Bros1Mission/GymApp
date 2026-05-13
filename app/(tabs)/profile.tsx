@@ -282,12 +282,14 @@ export default function ProfileScreen() {
               <ProfileMenuItem
                 icon="help-circle-outline"
                 label={t('profile.help')}
+                onPress={() => router.push('/help')}
                 colors={colors}
               />
               <View style={styles.menuDivider} />
               <ProfileMenuItem
                 icon="document-text-outline"
                 label={t('profile.terms')}
+                onPress={() => router.push('/terms')}
                 colors={colors}
               />
               <View style={styles.menuDivider} />
