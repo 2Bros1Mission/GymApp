@@ -87,6 +87,10 @@ function RootLayoutNav() {
           name="active-workout/[id]"
           options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
         />
+        <Stack.Screen
+          name="edit-profile"
+          options={{ animation: 'slide_from_right' }}
+        />
       </Stack>
       <OfflineBanner />
     </>
