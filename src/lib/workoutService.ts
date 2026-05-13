@@ -23,63 +23,34 @@ interface SaveWorkoutParams {
   notes?: string;
 }
 
-export async function saveWorkoutLog(params: SaveWorkoutParams) {
+export async function saveWorkoutLog(params: SaveWorkoutParams): Promise<{ error: string | null; workoutLogId?: string }> {
   const { userId, workoutId, workoutName, durationSeconds, exercises, notes } = params;
 
-  const { data: workoutLog, error: wError } = await supabase
-    .from('workout_logs')
-    .insert({
-      user_id: userId,
-      workout_id: workoutId,
-      workout_name: workoutName,
-      duration_seconds: durationSeconds,
-      completed: true,
-      end_time: new Date().toISOString(),
-      notes,
-    })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('save_workout', {
+    p_user_id: userId,
+    p_workout_id: workoutId,
+    p_workout_name: workoutName,
+    p_duration_seconds: durationSeconds,
+    p_notes: notes ?? null,
+    p_exercises: exercises.map((ex) => ({
+      exerciseId: ex.exerciseId,
+      exerciseName: ex.exerciseName,
+      orderIndex: ex.orderIndex,
+      sets: ex.sets.map((s) => ({
+        setNumber: s.setNumber,
+        weight: s.weight,
+        reps: s.reps,
+        completed: s.completed,
+      })),
+    })),
+  });
 
-  if (wError || !workoutLog) {
-    console.error('Error saving workout log:', wError);
-    return { error: wError?.message ?? 'Failed to save workout' };
+  if (error) {
+    console.error('Error saving workout (atomic):', error);
+    return { error: error.message };
   }
 
-  for (const exercise of exercises) {
-    const { data: exerciseLog, error: eError } = await supabase
-      .from('exercise_logs')
-      .insert({
-        workout_log_id: workoutLog.id,
-        exercise_id: exercise.exerciseId,
-        exercise_name: exercise.exerciseName,
-        order_index: exercise.orderIndex,
-      })
-      .select()
-      .single();
-
-    if (eError || !exerciseLog) {
-      console.error('Error saving exercise log:', eError);
-      continue;
-    }
-
-    const setRows = exercise.sets.map((set) => ({
-      exercise_log_id: exerciseLog.id,
-      set_number: set.setNumber,
-      weight: set.weight,
-      reps: set.reps,
-      completed: set.completed,
-    }));
-
-    const { error: sError } = await supabase
-      .from('set_logs')
-      .insert(setRows);
-
-    if (sError) {
-      console.error('Error saving set logs:', sError);
-    }
-  }
-
-  return { error: null, workoutLogId: workoutLog.id };
+  return { error: null, workoutLogId: data as string };
 }
 
 export async function getWorkoutHistory(userId: string, limit = 20) {

@@ -38,6 +38,8 @@ export default function ActiveWorkoutScreen() {
   const [isResting, setIsResting] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [workoutComplete, setWorkoutComplete] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -155,29 +157,39 @@ export default function ActiveWorkoutScreen() {
     }
   };
 
+  const doSave = async () => {
+    if (!user || !workout) return;
+    setIsSaving(true);
+    setSaveError(null);
+
+    const { error } = await saveWorkoutLog({
+      userId: user.id,
+      workoutId: workout.id,
+      workoutName: language === 'bg' ? workout.nameBg : workout.name,
+      durationSeconds: elapsedSeconds,
+      exercises: exercises.map((ex, idx) => ({
+        exerciseId: ex.exerciseId,
+        exerciseName: language === 'bg' ? ex.nameBg : ex.name,
+        orderIndex: idx,
+        sets: ex.sets.map((s) => ({
+          setNumber: s.setNumber,
+          weight: parseFloat(s.weight) || 0,
+          reps: parseInt(s.reps, 10) || 0,
+          completed: s.completed,
+        })),
+      })),
+    });
+
+    setIsSaving(false);
+    if (error) {
+      setSaveError(error);
+    }
+  };
+
   const finishWorkout = async () => {
     setWorkoutComplete(true);
     if (timerRef.current) clearInterval(timerRef.current);
-
-    if (user && workout) {
-      await saveWorkoutLog({
-        userId: user.id,
-        workoutId: workout.id,
-        workoutName: language === 'bg' ? workout.nameBg : workout.name,
-        durationSeconds: elapsedSeconds,
-        exercises: exercises.map((ex, idx) => ({
-          exerciseId: ex.exerciseId,
-          exerciseName: language === 'bg' ? ex.nameBg : ex.name,
-          orderIndex: idx,
-          sets: ex.sets.map((s) => ({
-            setNumber: s.setNumber,
-            weight: parseFloat(s.weight) || 0,
-            reps: parseInt(s.reps, 10) || 0,
-            completed: s.completed,
-          })),
-        })),
-      });
-    }
+    await doSave();
   };
 
   const breakpoint = useBreakpoint();
@@ -204,6 +216,23 @@ export default function ActiveWorkoutScreen() {
               <Text style={styles.completeStatLabel}>{t('activeWorkout.exercises')}</Text>
             </View>
           </View>
+
+          {saveError && (
+            <View style={styles.errorToast}>
+              <Ionicons name="alert-circle" size={20} color={Colors.error} />
+              <Text style={styles.errorToastText}>{t('activeWorkout.saveFailed')}</Text>
+              <Pressable
+                style={styles.retryButton}
+                onPress={doSave}
+                disabled={isSaving}
+              >
+                <Text style={styles.retryButtonText}>
+                  {isSaving ? t('activeWorkout.saving') : t('activeWorkout.retry')}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           <Pressable style={styles.doneButton} onPress={() => router.back()}>
             <Text style={styles.doneButtonText}>{t('common.close')}</Text>
           </Pressable>
@@ -597,6 +626,35 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  errorToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.error + '15',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: Colors.error + '30',
+  },
+  errorToastText: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.error,
+    fontWeight: '500',
+  },
+  retryButton: {
+    backgroundColor: Colors.error,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  retryButtonText: {
+    fontSize: FontSize.sm,
+    fontWeight: '700',
+    color: Colors.white,
   },
   doneButton: {
     backgroundColor: Colors.primary,
