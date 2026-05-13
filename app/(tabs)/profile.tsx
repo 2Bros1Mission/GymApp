@@ -3,8 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
-import { t } from '../../src/constants/i18n';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useLanguage } from '../../src/contexts/LanguageContext';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 
 function ProfileMenuItem({ icon, label, value, onPress, danger }: {
@@ -36,6 +36,7 @@ function ProfileMenuItem({ icon, label, value, onPress, danger }: {
 
 export default function ProfileScreen() {
   const { profile, signOut } = useAuth();
+  const { t, language, setLanguage } = useLanguage();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleSignOut = () => {
@@ -121,7 +122,8 @@ export default function ProfileScreen() {
             <ProfileMenuItem
               icon="language-outline"
               label={t('profile.language')}
-              value={profile?.language === 'bg' ? 'Български' : 'English'}
+              value={language === 'bg' ? 'Български' : 'English'}
+              onPress={() => setLanguage(language === 'bg' ? 'en' : 'bg')}
             />
             <View style={styles.menuDivider} />
             <ProfileMenuItem

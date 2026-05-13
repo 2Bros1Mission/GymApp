@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
-import { t } from '../../src/constants/i18n';
+import { useTranslation } from '../../src/contexts/LanguageContext';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { DifficultyLevel, MuscleGroup, Workout } from '../../src/types';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
@@ -30,7 +30,7 @@ const difficultyColors: Record<DifficultyLevel, string> = {
 type FilterType = 'all' | DifficultyLevel;
 
 function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: () => void }) {
-  const language = 'bg';
+  const { t, language } = useTranslation();
   const mainMuscle = workout.muscleGroups[0];
 
   return (
@@ -69,6 +69,7 @@ function WorkoutCard({ workout, onPress }: { workout: Workout; onPress: () => vo
 
 export default function WorkoutsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [filter, setFilter] = useState<FilterType>('all');
   const breakpoint = useBreakpoint();
   const numColumns = breakpoint === 'lg' ? 3 : breakpoint === 'md' ? 2 : 1;

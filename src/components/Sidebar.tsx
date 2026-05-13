@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
-import { t } from '../constants/i18n';
+import { useTranslation } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -29,6 +29,7 @@ export function Sidebar() {
   const router = useRouter();
   const segments = useSegments();
   const { profile, signOut } = useAuth();
+  const { t } = useTranslation();
 
   // The active tab segment is typically segments[1] inside (tabs)
   const activeSegment = segments[1] ?? 'index';
@@ -75,7 +76,7 @@ export function Sidebar() {
               {profile?.name ?? '—'}
             </Text>
             <Text style={styles.profileRole}>
-              {profile?.role === 'trainer' ? 'Треньор' : 'Клиент'}
+              {profile?.role === 'trainer' ? t('role.trainer') : t('role.client')}
             </Text>
           </View>
         </View>

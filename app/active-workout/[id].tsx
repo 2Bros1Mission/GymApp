@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
-import { t } from '../../src/constants/i18n';
+import { useTranslation } from '../../src/contexts/LanguageContext';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { saveWorkoutLog } from '../../src/lib/workoutService';
@@ -29,7 +29,7 @@ interface ActiveExercise {
 export default function ActiveWorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-
+  const { t } = useTranslation();
   const { user } = useAuth();
   const workout = sampleWorkouts.find((w) => w.id === id);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);

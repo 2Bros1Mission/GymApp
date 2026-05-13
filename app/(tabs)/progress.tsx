@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState, useCallback } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
-import { t } from '../../src/constants/i18n';
+import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats, getWorkoutHistory } from '../../src/lib/workoutService';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
@@ -89,6 +89,7 @@ function formatDuration(seconds: number | null): string {
 
 export default function ProgressScreen() {
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [stats, setStats] = useState({
     totalWorkouts: 0,
