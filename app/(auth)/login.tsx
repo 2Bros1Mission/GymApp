@@ -7,6 +7,7 @@ import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/the
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
+import { supabase } from '../../src/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,6 +19,29 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError(t('auth.enterEmailFirst'));
+      return;
+    }
+
+    setResetLoading(true);
+    setError('');
+    setResetSent(false);
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim());
+
+    setResetLoading(false);
+
+    if (resetError) {
+      setError(resetError.message);
+    } else {
+      setResetSent(true);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -97,9 +121,18 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
-            <Pressable style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>{t('auth.forgotPassword')}</Text>
+            <Pressable style={styles.forgotPassword} onPress={handleForgotPassword} disabled={resetLoading}>
+              <Text style={styles.forgotPasswordText}>
+                {resetLoading ? t('common.loading') : t('auth.forgotPassword')}
+              </Text>
             </Pressable>
+
+            {resetSent && (
+              <View style={styles.successBox}>
+                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                <Text style={styles.successText}>{t('auth.resetEmailSent')}</Text>
+              </View>
+            )}
 
             {error !== '' && (
               <View style={styles.errorBox}>
@@ -210,6 +243,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  successBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.success + '15',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+  },
+  successText: {
+    fontSize: FontSize.sm,
+    color: Colors.success,
+    flex: 1,
   },
   errorBox: {
     flexDirection: 'row',
