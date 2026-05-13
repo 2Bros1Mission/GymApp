@@ -44,19 +44,19 @@ export default function ProfileScreen() {
       setShowLogoutModal(true);
     } else {
       Alert.alert(
-        'Излизане',
-        'Сигурен ли си, че искаш да излезеш?',
+        t('profile.logoutTitle'),
+        t('profile.logoutConfirm'),
         [
-          { text: 'Отказ', style: 'cancel' },
-          { text: 'Излез', style: 'destructive', onPress: signOut },
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('profile.logout'), style: 'destructive', onPress: signOut },
         ]
       );
     }
   };
 
-  const displayName = profile?.name || 'Потребител';
+  const displayName = profile?.name || t('profile.defaultName');
   const displayEmail = profile?.email || '';
-  const displayRole = profile?.role === 'trainer' ? 'Треньор' : 'Клиент';
+  const displayRole = profile?.role === 'trainer' ? t('role.trainer') : t('role.client');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -86,16 +86,16 @@ export default function ProfileScreen() {
             <Ionicons name="diamond" size={24} color={Colors.accent} />
             <View>
               <Text style={styles.subTitle}>{t('profile.free')}</Text>
-              <Text style={styles.subDesc}>Преминете към Премиум за повече функции</Text>
+              <Text style={styles.subDesc}>{t('profile.upgradeDesc')}</Text>
             </View>
           </View>
           <Pressable style={styles.upgradeButton}>
-            <Text style={styles.upgradeText}>Преминете към Премиум</Text>
+            <Text style={styles.upgradeText}>{t('profile.upgrade')}</Text>
           </Pressable>
         </View>
 
         <View style={styles.menuSection}>
-          <Text style={styles.menuSectionTitle}>Акаунт</Text>
+          <Text style={styles.menuSectionTitle}>{t('profile.account')}</Text>
           <View style={styles.menuCard}>
             <ProfileMenuItem
               icon="person-outline"
@@ -104,14 +104,14 @@ export default function ProfileScreen() {
             <View style={styles.menuDivider} />
             <ProfileMenuItem
               icon="barbell-outline"
-              label="Фитнес цели"
-              value={profile?.goal ? profile.goal.replace('_', ' ') : 'Не е избрана'}
+              label={t('profile.fitnessGoals')}
+              value={profile?.goal ? profile.goal.replace('_', ' ') : t('profile.noGoal')}
             />
             <View style={styles.menuDivider} />
             <ProfileMenuItem
               icon="scale-outline"
-              label="Тегло и метрики"
-              value={profile?.weight ? `${profile.weight} кг` : '--'}
+              label={t('profile.weightMetrics')}
+              value={profile?.weight ? `${profile.weight} ${t('exercise.weight')}` : '--'}
             />
           </View>
         </View>
@@ -128,13 +128,13 @@ export default function ProfileScreen() {
             <View style={styles.menuDivider} />
             <ProfileMenuItem
               icon="notifications-outline"
-              label="Известия"
+              label={t('profile.notifications')}
             />
             <View style={styles.menuDivider} />
             <ProfileMenuItem
               icon="moon-outline"
-              label="Тъмна тема"
-              value="Вкл."
+              label={t('profile.darkTheme')}
+              value={t('common.on')}
             />
           </View>
         </View>
@@ -143,12 +143,12 @@ export default function ProfileScreen() {
           <View style={styles.menuCard}>
             <ProfileMenuItem
               icon="help-circle-outline"
-              label="Помощ и поддръжка"
+              label={t('profile.help')}
             />
             <View style={styles.menuDivider} />
             <ProfileMenuItem
               icon="document-text-outline"
-              label="Условия за ползване"
+              label={t('profile.terms')}
             />
             <View style={styles.menuDivider} />
             <ProfileMenuItem
@@ -173,20 +173,20 @@ export default function ProfileScreen() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setShowLogoutModal(false)}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Излизане</Text>
-            <Text style={styles.modalMessage}>Сигурен ли си, че искаш да излезеш?</Text>
+            <Text style={styles.modalTitle}>{t('profile.logoutTitle')}</Text>
+            <Text style={styles.modalMessage}>{t('profile.logoutConfirm')}</Text>
             <View style={styles.modalButtons}>
               <Pressable
                 style={styles.modalBtnCancel}
                 onPress={() => setShowLogoutModal(false)}
               >
-                <Text style={styles.modalBtnCancelText}>Отказ</Text>
+                <Text style={styles.modalBtnCancelText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 style={styles.modalBtnConfirm}
                 onPress={() => { setShowLogoutModal(false); signOut(); }}
               >
-                <Text style={styles.modalBtnConfirmText}>Излез</Text>
+                <Text style={styles.modalBtnConfirmText}>{t('profile.logout')}</Text>
               </Pressable>
             </View>
           </View>

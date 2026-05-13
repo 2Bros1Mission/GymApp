@@ -3,10 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
 
@@ -19,25 +21,25 @@ export default function WelcomeScreen() {
           </View>
           <Text style={styles.title}>GymApp</Text>
           <Text style={styles.subtitle}>
-            Твоят личен фитнес партньор
+            {t('auth.welcomeSubtitle')}
           </Text>
           <Text style={styles.description}>
-            Тренировки, проследяване на прогрес и връзка с треньори — всичко на едно място.
+            {t('auth.welcomeDesc')}
           </Text>
         </View>
 
         <View style={styles.features}>
           <View style={styles.featureRow}>
             <Ionicons name="barbell-outline" size={22} color={Colors.accent} />
-            <Text style={styles.featureText}>Готови тренировъчни програми</Text>
+            <Text style={styles.featureText}>{t('auth.featurePrograms')}</Text>
           </View>
           <View style={styles.featureRow}>
             <Ionicons name="stats-chart-outline" size={22} color={Colors.accent} />
-            <Text style={styles.featureText}>Проследявай прогреса си</Text>
+            <Text style={styles.featureText}>{t('auth.featureProgress')}</Text>
           </View>
           <View style={styles.featureRow}>
             <Ionicons name="people-outline" size={22} color={Colors.accent} />
-            <Text style={styles.featureText}>Свържи се с треньор</Text>
+            <Text style={styles.featureText}>{t('auth.featureTrainer')}</Text>
           </View>
         </View>
 
@@ -46,13 +48,13 @@ export default function WelcomeScreen() {
             style={styles.primaryButton}
             onPress={() => router.push('/(auth)/signup')}
           >
-            <Text style={styles.primaryButtonText}>Създай акаунт</Text>
+            <Text style={styles.primaryButtonText}>{t('auth.createAccount')}</Text>
           </Pressable>
           <Pressable
             style={styles.secondaryButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <Text style={styles.secondaryButtonText}>Вече имам акаунт</Text>
+            <Text style={styles.secondaryButtonText}>{t('auth.haveAccount')}</Text>
           </Pressable>
         </View>
       </View>

@@ -5,11 +5,13 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
+  const { t } = useTranslation();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,11 +24,11 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
-      setError('Моля, попълни всички полета');
+      setError(t('common.fillAllFields'));
       return;
     }
     if (password.length < 6) {
-      setError('Паролата трябва да е поне 6 символа');
+      setError(t('auth.passwordMinLength'));
       return;
     }
 
@@ -65,21 +67,21 @@ export default function SignupScreen() {
           {success ? (
             <View style={styles.successContainer}>
               <Ionicons name="mail-outline" size={64} color={Colors.success} />
-              <Text style={styles.successTitle}>Провери имейла си!</Text>
+              <Text style={styles.successTitle}>{t('auth.checkEmail')}</Text>
               <Text style={styles.successText}>
-                Изпратихме линк за потвърждение на {email}. Натисни го, за да активираш акаунта си.
+                {t('auth.confirmationSent').replace('{email}', email)}
               </Text>
               <Pressable
                 style={styles.submitButton}
                 onPress={() => router.replace('/(auth)/login')}
               >
-                <Text style={styles.submitButtonText}>Към вход</Text>
+                <Text style={styles.submitButtonText}>{t('auth.goToLogin')}</Text>
               </Pressable>
             </View>
           ) : (
           <>
-          <Text style={styles.title}>Създай акаунт</Text>
-          <Text style={styles.subtitle}>Започни своя фитнес път</Text>
+          <Text style={styles.title}>{t('auth.createAccount')}</Text>
+          <Text style={styles.subtitle}>{t('auth.signupSubtitle')}</Text>
 
           <View style={styles.roleSelector}>
             <Pressable
@@ -92,7 +94,7 @@ export default function SignupScreen() {
                 color={role === 'client' ? Colors.white : Colors.textMuted}
               />
               <Text style={[styles.roleText, role === 'client' && styles.roleTextActive]}>
-                Клиент
+                {t('role.client')}
               </Text>
             </Pressable>
             <Pressable
@@ -105,7 +107,7 @@ export default function SignupScreen() {
                 color={role === 'trainer' ? Colors.white : Colors.textMuted}
               />
               <Text style={[styles.roleText, role === 'trainer' && styles.roleTextActive]}>
-                Треньор
+                {t('role.trainer')}
               </Text>
             </Pressable>
           </View>
@@ -115,7 +117,7 @@ export default function SignupScreen() {
               <Ionicons name="person-outline" size={20} color={Colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Име"
+                placeholder={t('auth.name')}
                 placeholderTextColor={Colors.textMuted}
                 value={name}
                 onChangeText={setName}
@@ -127,7 +129,7 @@ export default function SignupScreen() {
               <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Имейл"
+                placeholder={t('auth.email')}
                 placeholderTextColor={Colors.textMuted}
                 value={email}
                 onChangeText={setEmail}
@@ -141,7 +143,7 @@ export default function SignupScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Парола"
+                placeholder={t('auth.password')}
                 placeholderTextColor={Colors.textMuted}
                 value={password}
                 onChangeText={setPassword}
@@ -172,7 +174,7 @@ export default function SignupScreen() {
               {loading ? (
                 <ActivityIndicator color={Colors.white} />
               ) : (
-                <Text style={styles.submitButtonText}>Регистрирай се</Text>
+                <Text style={styles.submitButtonText}>{t('auth.signup')}</Text>
               )}
             </Pressable>
           </View>
@@ -182,8 +184,8 @@ export default function SignupScreen() {
             onPress={() => router.replace('/(auth)/login')}
           >
             <Text style={styles.switchAuthText}>
-              Вече имаш акаунт?{' '}
-              <Text style={styles.switchAuthLink}>Влез</Text>
+              {t('auth.hasAccount')}{' '}
+              <Text style={styles.switchAuthLink}>{t('auth.login')}</Text>
             </Text>
           </Pressable>
           </>

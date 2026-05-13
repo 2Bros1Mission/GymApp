@@ -17,7 +17,7 @@ export default function WorkoutDetailScreen() {
   if (!workout) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Тренировката не е намерена</Text>
+        <Text style={styles.errorText}>{t('workouts.notFound')}</Text>
       </SafeAreaView>
     );
   }
@@ -70,7 +70,7 @@ export default function WorkoutDetailScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Упражнения</Text>
+        <Text style={styles.sectionTitle}>{t('workouts.exercisesTitle')}</Text>
 
         {workout.exercises.map((exercise, index) => (
           <View key={exercise.id} style={styles.exerciseCard}>
@@ -86,7 +86,7 @@ export default function WorkoutDetailScreen() {
                   {exercise.sets} {t('exercise.sets')} × {exercise.reps} {t('exercise.reps')}
                 </Text>
                 <Text style={styles.exerciseRest}>
-                  {t('exercise.rest')}: {exercise.restSeconds}с
+                  {t('exercise.rest')}: {exercise.restSeconds}{t('common.seconds')}
                 </Text>
               </View>
             </View>

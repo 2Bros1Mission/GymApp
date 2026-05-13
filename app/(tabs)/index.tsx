@@ -48,7 +48,7 @@ export default function HomeScreen() {
     loadStats();
   }, [loadStats]);
 
-  const displayName = profile?.name || 'Атлет';
+  const displayName = profile?.name || t('home.defaultName');
 
   const breakpoint = useBreakpoint();
   const isLarge = breakpoint === 'lg';
@@ -96,7 +96,7 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>{t('home.goals')}</Text>
               <View style={styles.goalCard}>
                 <View style={styles.goalRow}>
-                  <Text style={styles.goalText}>Тренировки тази седмица</Text>
+                  <Text style={styles.goalText}>{t('home.weeklyWorkouts')}</Text>
                   <Text style={styles.goalProgress}>{stats.thisWeek}/5</Text>
                 </View>
                 <View style={styles.progressBar}>
