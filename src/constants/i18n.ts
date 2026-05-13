@@ -19,6 +19,8 @@ export const translations: Translations = {
     'home.goals': 'Цели',
     'home.defaultName': 'Атлет',
     'home.weeklyWorkouts': 'Тренировки тази седмица',
+    'home.statsError': 'Неуспешно зареждане на статистики',
+    'home.retry': 'Опитай пак',
 
     'workouts.title': 'Тренировки',
     'workouts.browse': 'Разгледай тренировки',
@@ -160,6 +162,8 @@ export const translations: Translations = {
     'home.goals': 'Goals',
     'home.defaultName': 'Athlete',
     'home.weeklyWorkouts': 'Workouts this week',
+    'home.statsError': 'Failed to load stats',
+    'home.retry': 'Retry',
 
     'workouts.title': 'Workouts',
     'workouts.browse': 'Browse Workouts',
