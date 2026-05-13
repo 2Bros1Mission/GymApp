@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { Colors } from '../src/constants/theme';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { LanguageProvider } from '../src/contexts/LanguageContext';
 
 function useWebPointerEventsFix() {
   useEffect(() => {
@@ -74,7 +75,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <LanguageProvider>
+        <RootLayoutNav />
+      </LanguageProvider>
     </AuthProvider>
   );
 }
