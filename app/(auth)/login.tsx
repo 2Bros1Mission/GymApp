@@ -22,9 +22,42 @@ export default function LoginScreen() {
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
+  // Inline validation errors
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const validateEmail = (value: string): string => {
+    if (!value.trim()) return t('auth.invalidEmail');
+    if (!EMAIL_REGEX.test(value.trim())) return t('auth.invalidEmail');
+    return '';
+  };
+
+  const validatePassword = (value: string): string => {
+    if (!value) return t('auth.passwordRequired');
+    if (value.length < 6) return t('auth.passwordMinLength');
+    return '';
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (emailError) setEmailError('');
+    if (error) setError('');
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (passwordError) setPasswordError('');
+    if (error) setError('');
+  };
+
+  const isFormValid = email.trim() !== '' && password.trim() !== '';
+
   const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      setError(t('auth.enterEmailFirst'));
+    const eErr = validateEmail(email);
+    if (eErr) {
+      setEmailError(eErr);
       return;
     }
 
@@ -44,10 +77,12 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError(t('common.fillAllFields'));
-      return;
-    }
+    const eErr = validateEmail(email);
+    const pErr = validatePassword(password);
+    setEmailError(eErr);
+    setPasswordError(pErr);
+
+    if (eErr || pErr) return;
 
     setLoading(true);
     setError('');
@@ -87,38 +122,46 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('auth.email')}
-                placeholderTextColor={Colors.textMuted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+            <View>
+              <View style={[styles.inputContainer, emailError ? styles.inputContainerError : undefined]}>
+                <Ionicons name="mail-outline" size={20} color={emailError ? Colors.error : Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.email')}
+                  placeholderTextColor={Colors.textMuted}
+                  value={email}
+                  onChangeText={handleEmailChange}
+                  onBlur={() => { if (email.trim()) setEmailError(validateEmail(email)); }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              {emailError !== '' && <Text style={styles.fieldError}>{emailError}</Text>}
             </View>
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('auth.password')}
-                placeholderTextColor={Colors.textMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <Pressable onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={Colors.textMuted}
+            <View>
+              <View style={[styles.inputContainer, passwordError ? styles.inputContainerError : undefined]}>
+                <Ionicons name="lock-closed-outline" size={20} color={passwordError ? Colors.error : Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('auth.password')}
+                  placeholderTextColor={Colors.textMuted}
+                  value={password}
+                  onChangeText={handlePasswordChange}
+                  onBlur={() => { if (password) setPasswordError(validatePassword(password)); }}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
                 />
-              </Pressable>
+                <Pressable onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={Colors.textMuted}
+                  />
+                </Pressable>
+              </View>
+              {passwordError !== '' && <Text style={styles.fieldError}>{passwordError}</Text>}
             </View>
 
             <Pressable style={styles.forgotPassword} onPress={handleForgotPassword} disabled={resetLoading}>
@@ -142,9 +185,9 @@ export default function LoginScreen() {
             )}
 
             <Pressable
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (loading || !isFormValid) && styles.submitButtonDisabled]}
               onPress={handleLogin}
-              disabled={loading}
+              disabled={loading || !isFormValid}
             >
               {loading ? (
                 <ActivityIndicator color={Colors.white} />
@@ -229,6 +272,15 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  inputContainerError: {
+    borderColor: Colors.error,
+  },
+  fieldError: {
+    fontSize: FontSize.xs,
+    color: Colors.error,
+    marginTop: 4,
+    marginLeft: Spacing.md,
   },
   input: {
     flex: 1,
