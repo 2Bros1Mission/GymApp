@@ -8,6 +8,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats, getWorkoutHistory } from '../../src/lib/workoutService';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
+import { SkeletonWeekCalendar, SkeletonStatCard, SkeletonHistoryItem } from '../../src/components/SkeletonLoader';
 
 // Day labels are now provided via translations
 
@@ -97,15 +98,23 @@ export default function ProgressScreen() {
     weekDays: [false, false, false, false, false, false, false],
   });
   const [history, setHistory] = useState<WorkoutLogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    const [s, h] = await Promise.all([
-      getWorkoutStats(user.id),
-      getWorkoutHistory(user.id, 10),
-    ]);
-    setStats(s);
-    setHistory(h);
+    setIsLoading(true);
+    try {
+      const [s, h] = await Promise.all([
+        getWorkoutStats(user.id),
+        getWorkoutHistory(user.id, 10),
+      ]);
+      setStats(s);
+      setHistory(h);
+    } catch (err) {
+      console.error('Failed to load progress data:', err);
+    } finally {
+      setIsLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -130,42 +139,61 @@ export default function ProgressScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('progress.thisWeekSection')}</Text>
-            <View style={styles.weekCard}>
-              <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} />
-              <Text style={styles.weekSummary}>
-                {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
-              </Text>
-            </View>
+            {isLoading ? (
+              <SkeletonWeekCalendar />
+            ) : (
+              <View style={styles.weekCard}>
+                <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} />
+                <Text style={styles.weekSummary}>
+                  {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
+                </Text>
+              </View>
+            )}
           </View>
 
-          <View style={styles.statsGrid}>
-            <ProgressStat
-              label={t('progress.weight')}
-              value={user ? `${(user as any).weight ?? '--'} ${kgLabel}` : `-- ${kgLabel}`}
-              icon="scale"
-            />
-            <ProgressStat
-              label={t('progress.workouts')}
-              value={`${stats.totalWorkouts}`}
-              change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
-              icon="barbell"
-            />
-            <ProgressStat
-              label={t('home.streak')}
-              value={`${stats.streak} ${t('home.days')}`}
-              icon="flame"
-            />
-            <ProgressStat
-              label={t('home.thisWeek')}
-              value={`${stats.thisWeek}`}
-              icon="calendar"
-            />
-          </View>
+          {isLoading ? (
+            <View style={styles.statsGrid}>
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+              <SkeletonStatCard />
+            </View>
+          ) : (
+            <View style={styles.statsGrid}>
+              <ProgressStat
+                label={t('progress.weight')}
+                value={user ? `${(user as any).weight ?? '--'} ${kgLabel}` : `-- ${kgLabel}`}
+                icon="scale"
+              />
+              <ProgressStat
+                label={t('progress.workouts')}
+                value={`${stats.totalWorkouts}`}
+                change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
+                icon="barbell"
+              />
+              <ProgressStat
+                label={t('home.streak')}
+                value={`${stats.streak} ${t('home.days')}`}
+                icon="flame"
+              />
+              <ProgressStat
+                label={t('home.thisWeek')}
+                value={`${stats.thisWeek}`}
+                icon="calendar"
+              />
+            </View>
+          )}
 
           <View style={isLarge ? styles.desktopHistoryRow : undefined}>
             <View style={[styles.section, isLarge && styles.desktopHistorySection]}>
               <Text style={styles.sectionTitle}>{t('progress.history')}</Text>
-              {history.length > 0 ? (
+              {isLoading ? (
+                <View style={styles.historyCard}>
+                  <SkeletonHistoryItem />
+                  <SkeletonHistoryItem />
+                  <SkeletonHistoryItem />
+                </View>
+              ) : history.length > 0 ? (
                 <View style={styles.historyCard}>
                   {history.map((log) => (
                     <WorkoutHistoryItem

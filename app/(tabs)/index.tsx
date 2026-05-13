@@ -10,6 +10,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats } from '../../src/lib/workoutService';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
+import { SkeletonStatCard, SkeletonBox } from '../../src/components/SkeletonLoader';
 
 function StatCard({ icon, label, value, color }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -38,7 +39,7 @@ export default function HomeScreen() {
     thisWeek: 0,
   });
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const loadStats = useCallback(async () => {
     if (!user) return;
@@ -123,19 +124,32 @@ export default function HomeScreen() {
               </View>
 
               <Text style={styles.sectionTitle}>{t('home.goals')}</Text>
-              <View style={styles.goalCard}>
-                <View style={styles.goalRow}>
-                  <Text style={styles.goalText}>{t('home.weeklyWorkouts')}</Text>
-                  <Text style={styles.goalProgress}>{stats.thisWeek}/5</Text>
+              {statsLoading && !statsError ? (
+                <View style={styles.goalCard}>
+                  <SkeletonBox width="100%" height={6} borderRadius={3} />
                 </View>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${Math.min((stats.thisWeek / 5) * 100, 100)}%` }]} />
+              ) : (
+                <View style={styles.goalCard}>
+                  <View style={styles.goalRow}>
+                    <Text style={styles.goalText}>{t('home.weeklyWorkouts')}</Text>
+                    <Text style={styles.goalProgress}>{stats.thisWeek}/5</Text>
+                  </View>
+                  <View style={styles.progressBar}>
+                    <View style={[styles.progressFill, { width: `${Math.min((stats.thisWeek / 5) * 100, 100)}%` }]} />
+                  </View>
                 </View>
-              </View>
+              )}
             </View>
 
             <View style={isLarge ? styles.desktopSide : undefined}>
               <Text style={styles.sectionTitle}>{t('home.quickStats')}</Text>
+              {statsLoading && !statsError ? (
+                <View style={[styles.statsRow, isLarge && styles.statsRowDesktop]}>
+                  <SkeletonStatCard />
+                  <SkeletonStatCard />
+                  <SkeletonStatCard />
+                </View>
+              ) : (
               <View style={[styles.statsRow, isLarge && styles.statsRowDesktop]}>
                 <StatCard
                   icon="flame"
@@ -156,6 +170,7 @@ export default function HomeScreen() {
                   color={Colors.success}
                 />
               </View>
+              )}
             </View>
           </View>
 
