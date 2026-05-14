@@ -73,6 +73,46 @@ export type FitnessGoal =
   | 'stay_healthy'
   | 'improve_endurance';
 
+export type GoalType = 'weight_target' | 'lift_target' | 'frequency' | 'custom';
+export type GoalStatus = 'active' | 'completed' | 'abandoned';
+export type SuggestionStatus = 'pending' | 'accepted' | 'adjusted' | 'rejected';
+
+export interface ClientGoal {
+  id: string;
+  clientId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue: number | null;
+  currentValue: number | null;
+  unit: string | null;
+  exerciseName: string | null;
+  deadline: string | null;
+  status: GoalStatus;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface GoalSuggestion {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  targetGoalId: string | null;
+  suggestionType: 'new_goal' | 'adjustment';
+  goalType: GoalType;
+  title: string;
+  targetValue: number | null;
+  unit: string | null;
+  exerciseName: string | null;
+  deadline: string | null;
+  message: string | null;
+  status: SuggestionStatus;
+  clientResponseAt: string | null;
+  createdAt: string;
+  trainerName?: string;
+  targetGoalTitle?: string;
+}
+
 export type DifficultyLevel = 'beginner' | 'intermediate' | 'advanced';
 
 export interface CustomWorkout {
