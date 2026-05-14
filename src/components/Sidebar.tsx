@@ -21,11 +21,13 @@ const CLIENT_NAV_ITEMS: NavItem[] = [
   { route: '/(tabs)', segment: 'index', labelKey: 'tab.home', icon: 'home-outline', iconActive: 'home' },
   { route: '/(tabs)/workouts', segment: 'workouts', labelKey: 'tab.workouts', icon: 'barbell-outline', iconActive: 'barbell' },
   { route: '/(tabs)/progress', segment: 'progress', labelKey: 'tab.progress', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
+  { route: '/conversations', segment: 'conversations', labelKey: 'tab.messages', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
   { route: '/(tabs)/profile', segment: 'profile', labelKey: 'tab.profile', icon: 'person-outline', iconActive: 'person' },
 ];
 
 const TRAINER_NAV_ITEMS: NavItem[] = [
   { route: '/(tabs)/dashboard', segment: 'dashboard', labelKey: 'tab.dashboard', icon: 'grid-outline', iconActive: 'grid' },
+  { route: '/conversations', segment: 'conversations', labelKey: 'tab.messages', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
   { route: '/(tabs)/profile', segment: 'profile', labelKey: 'tab.profile', icon: 'person-outline', iconActive: 'person' },
 ];
 

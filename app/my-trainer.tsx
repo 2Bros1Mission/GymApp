@@ -13,6 +13,7 @@ import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import { redeemInviteCode, getClientTrainer, removeConnection, confirmConnection } from '../src/lib/trainerService';
+import { getOrCreateConversation } from '../src/lib/messageService';
 import type { TrainerClient } from '../src/types';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
@@ -33,6 +34,8 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   trainerAvatarText: { fontSize: FontSize.xxl, fontWeight: '700', color: colors.white },
   trainerName: { fontSize: FontSize.xl, fontWeight: '700', color: colors.text },
   trainerDate: { fontSize: FontSize.xs, color: colors.textMuted },
+  messageBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.primary + '15', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginTop: Spacing.sm },
+  messageBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.primary },
   disconnectBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.error + '15', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginTop: Spacing.sm },
   disconnectBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.error },
   emptyCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md },
@@ -242,6 +245,20 @@ export default function MyTrainerScreen() {
             <Text style={styles.trainerDate}>
               {t('trainer.connectedSince')} {formatDate(trainer.connectedAt)}
             </Text>
+            <Pressable
+              style={styles.messageBtn}
+              onPress={() => {
+                guardAction(async () => {
+                  const result = await getOrCreateConversation(trainer.trainerId);
+                  if (result.success && result.conversationId) {
+                    router.push(`/chat?conversationId=${result.conversationId}`);
+                  }
+                });
+              }}
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={colors.primary} />
+              <Text style={styles.messageBtnText}>{t('messages.sendMessage')}</Text>
+            </Pressable>
             <Pressable style={styles.disconnectBtn} onPress={handleDisconnect}>
               <Ionicons name="close-circle-outline" size={18} color={colors.error} />
               <Text style={styles.disconnectBtnText}>{t('client.disconnect')}</Text>
