@@ -227,6 +227,8 @@ export const translations: Translations = {
     'client.confirm': 'Потвърди',
     'client.pendingApproval': 'Чакаш одобрение от треньора',
     'client.rejected': 'Заявката е отхвърлена',
+    'client.rejectedMessage': 'Заявката ти за свързване с {name} беше отхвърлена. Можеш да опиташ с друг треньор.',
+    'client.tryAnotherCode': 'Опитай с друг код',
 
     'network.offline': 'Няма интернет връзка',
     'network.actionRequiresNetwork': 'Това действие изисква интернет връзка',
@@ -522,6 +524,8 @@ export const translations: Translations = {
     'client.confirm': 'Confirm',
     'client.pendingApproval': 'Waiting for trainer approval',
     'client.rejected': 'Request was rejected',
+    'client.rejectedMessage': 'Your connection request to {name} was rejected. You can try connecting with a different trainer.',
+    'client.tryAnotherCode': 'Try Another Code',
 
     'network.offline': 'No internet connection',
     'network.actionRequiresNetwork': 'This action requires an internet connection',

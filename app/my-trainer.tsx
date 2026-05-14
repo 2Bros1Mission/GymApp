@@ -45,6 +45,11 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   pendingCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.warning + '40' },
   pendingBadge: { backgroundColor: colors.warning + '20', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
   pendingBadgeText: { fontSize: FontSize.xs, fontWeight: '600', color: colors.warning },
+  rejectedCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.error + '40' },
+  rejectedBadge: { backgroundColor: colors.error + '20', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
+  rejectedBadgeText: { fontSize: FontSize.xs, fontWeight: '600', color: colors.error },
+  tryAnotherBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.primary, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, marginTop: Spacing.sm },
+  tryAnotherBtnText: { fontSize: FontSize.sm, fontWeight: '700', color: colors.white },
   confirmCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.primary + '40' },
   confirmBtnRow: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm },
   confirmBtn: { backgroundColor: colors.primary, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, alignItems: 'center' },
@@ -165,6 +170,14 @@ export default function MyTrainerScreen() {
     });
   };
 
+  const handleDismissRejection = () => {
+    guardAction(async () => {
+      if (!trainer) return;
+      await removeConnection(trainer.id);
+      retry();
+    });
+  };
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString();
@@ -270,6 +283,28 @@ export default function MyTrainerScreen() {
         trainerEmail: trainer.trainerEmail ?? '',
       });
       return null;
+    }
+
+    // Rejected connection
+    if (trainer && trainer.status === 'rejected') {
+      return (
+        <>
+          <Text style={styles.sectionTitle}>{t('client.myTrainer')}</Text>
+          <View style={styles.rejectedCard}>
+            <Ionicons name="close-circle" size={48} color={colors.error} />
+            <View style={styles.rejectedBadge}>
+              <Text style={styles.rejectedBadgeText}>{t('client.rejected')}</Text>
+            </View>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
+              {t('client.rejectedMessage').replace('{name}', trainer.trainerName ?? '--')}
+            </Text>
+            <Pressable style={styles.tryAnotherBtn} onPress={handleDismissRejection}>
+              <Ionicons name="refresh" size={18} color={colors.white} />
+              <Text style={styles.tryAnotherBtnText}>{t('client.tryAnotherCode')}</Text>
+            </Pressable>
+          </View>
+        </>
+      );
     }
 
     // No trainer — show code entry
