@@ -74,3 +74,26 @@ export type FitnessGoal =
   | 'improve_endurance';
 
 export type DifficultyLevel = 'beginner' | 'intermediate' | 'advanced';
+
+export interface TrainerInvite {
+  id: string;
+  trainerId: string;
+  code: string;
+  expiresAt: string;
+  used: boolean;
+  usedBy?: string;
+  createdAt: string;
+}
+
+export interface TrainerClient {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  status: 'active' | 'removed';
+  connectedAt: string;
+  // Joined from profiles
+  clientName?: string;
+  clientEmail?: string;
+  trainerName?: string;
+  trainerEmail?: string;
+}

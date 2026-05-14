@@ -233,6 +233,13 @@ export default function ProfileScreen() {
                 value={profile?.weight ? `${profile.weight} ${t('exercise.weight')}` : '--'}
                 colors={colors}
               />
+              <View style={styles.menuDivider} />
+              <ProfileMenuItem
+                icon={profile?.role === 'trainer' ? 'people-outline' : 'person-add-outline'}
+                label={profile?.role === 'trainer' ? t('trainer.myClients') : t('client.myTrainer')}
+                onPress={() => router.push(profile?.role === 'trainer' ? '/trainer-clients' : '/my-trainer')}
+                colors={colors}
+              />
             </View>
           </View>
 
