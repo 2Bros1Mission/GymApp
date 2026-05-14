@@ -12,6 +12,7 @@ import { useBreakpoint } from '../src/hooks/useBreakpoint';
 import { useAsyncData } from '../src/hooks/useAsyncData';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
+import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import { createInviteCode, getActiveInvites, getTrainerClients, removeConnection } from '../src/lib/trainerService';
 import type { TrainerInvite, TrainerClient } from '../src/types';
 
@@ -60,6 +61,8 @@ export default function TrainerClientsScreen() {
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
 
+  const { guardAction } = useOfflineGuard();
+
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
 
@@ -80,17 +83,19 @@ export default function TrainerClientsScreen() {
 
   const { clients, invites } = data;
 
-  const handleGenerateCode = async () => {
-    if (!user) return;
-    setGenerating(true);
-    const { code, error: genError } = await createInviteCode(user.id);
-    setGenerating(false);
-    if (code) {
-      setGeneratedCode(code);
-      retry();
-    } else if (genError) {
-      Alert.alert(t('common.error'), genError);
-    }
+  const handleGenerateCode = () => {
+    guardAction(async () => {
+      if (!user) return;
+      setGenerating(true);
+      const { code, error: genError } = await createInviteCode(user.id);
+      setGenerating(false);
+      if (code) {
+        setGeneratedCode(code);
+        retry();
+      } else if (genError) {
+        Alert.alert(t('common.error'), genError);
+      }
+    });
   };
 
   const handleCopyCode = async (code: string) => {
@@ -102,22 +107,24 @@ export default function TrainerClientsScreen() {
   };
 
   const handleRemoveClient = (connection: TrainerClient) => {
-    const doRemove = async () => {
-      const result = await removeConnection(connection.id);
-      if (result.error) {
-        Alert.alert(t('common.error'), result.error);
-        return;
-      }
-      retry();
-    };
+    guardAction(() => {
+      const doRemove = async () => {
+        const result = await removeConnection(connection.id);
+        if (result.error) {
+          Alert.alert(t('common.error'), result.error);
+          return;
+        }
+        retry();
+      };
 
-    confirmAction(
-      t('trainer.removeClient'),
-      t('trainer.removeConfirm'),
-      t('trainer.removeClient'),
-      t('common.cancel'),
-      doRemove,
-    );
+      confirmAction(
+        t('trainer.removeClient'),
+        t('trainer.removeConfirm'),
+        t('trainer.removeClient'),
+        t('common.cancel'),
+        doRemove,
+      );
+    });
   };
 
   const formatDate = (dateStr: string) => {

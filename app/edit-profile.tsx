@@ -9,6 +9,7 @@ import { useTranslation } from '../src/contexts/LanguageContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { useBreakpoint } from '../src/hooks/useBreakpoint';
 import { supabase } from '../src/lib/supabase';
+import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 
 const GOALS = [
   'lose_weight',
@@ -53,6 +54,7 @@ export default function EditProfileScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { guardAction } = useOfflineGuard();
 
   const [name, setName] = useState(profile?.name ?? '');
   const [weight, setWeight] = useState(profile?.weight ? String(profile.weight) : '');
@@ -65,35 +67,37 @@ export default function EditProfileScreen() {
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
 
-  const handleSave = async () => {
-    if (!name.trim()) return;
-    if (!profile?.id) return;
+  const handleSave = () => {
+    guardAction(async () => {
+      if (!name.trim()) return;
+      if (!profile?.id) return;
 
-    setSaving(true);
-    setError('');
-    setSuccess(false);
+      setSaving(true);
+      setError('');
+      setSuccess(false);
 
-    const updates = {
-      name: name.trim(),
-      weight: weight ? parseFloat(weight) : null,
-      height: height ? parseFloat(height) : null,
-      goal: goal || null,
-    };
+      const updates = {
+        name: name.trim(),
+        weight: weight ? parseFloat(weight) : null,
+        height: height ? parseFloat(height) : null,
+        goal: goal || null,
+      };
 
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', profile.id);
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', profile.id);
 
-    setSaving(false);
+      setSaving(false);
 
-    if (updateError) {
-      setError(t('profile.saveError'));
-    } else {
-      setSuccess(true);
-      await refreshProfile();
-      setTimeout(() => router.back(), 800);
-    }
+      if (updateError) {
+        setError(t('profile.saveError'));
+      } else {
+        setSuccess(true);
+        await refreshProfile();
+        setTimeout(() => router.back(), 800);
+      }
+    });
   };
 
   const hasChanges =

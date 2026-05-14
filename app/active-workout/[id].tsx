@@ -10,6 +10,7 @@ import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { saveWorkoutLog } from '../../src/lib/workoutService';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
+import { useOfflineGuard } from '../../src/hooks/useOfflineGuard';
 
 interface ActiveSet {
   setNumber: number;
@@ -86,6 +87,7 @@ export default function ActiveWorkoutScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { guardAction } = useOfflineGuard();
 
   const workout = sampleWorkouts.find((w) => w.id === id);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -244,10 +246,12 @@ export default function ActiveWorkoutScreen() {
     }
   };
 
-  const finishWorkout = async () => {
-    setWorkoutComplete(true);
-    if (timerRef.current) clearInterval(timerRef.current);
-    await doSave();
+  const finishWorkout = () => {
+    guardAction(async () => {
+      setWorkoutComplete(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+      await doSave();
+    });
   };
 
   if (workoutComplete) {

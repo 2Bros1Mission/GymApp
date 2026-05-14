@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
+import { useOfflineGuard } from './useOfflineGuard';
 import { createCustomWorkout, updateCustomWorkout, getCustomWorkout } from '../lib/trainerService';
 import type { Exercise, MuscleGroup, DifficultyLevel } from '../types';
 
@@ -31,6 +32,7 @@ export function useWorkoutBuilderForm(editId?: string) {
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { guardAction } = useOfflineGuard();
 
   const [name, setName] = useState('');
   const [nameBg, setNameBg] = useState('');
@@ -115,50 +117,52 @@ export function useWorkoutBuilderForm(editId?: string) {
 
   const isValid = name.trim() !== '' && exercises.length > 0 && exercises.every((e) => e.name.trim() !== '');
 
-  const handleSave = useCallback(async () => {
-    if (!user || !isValid) return;
-    setSaving(true);
-    setError('');
-    setSuccess('');
+  const handleSave = useCallback(() => {
+    guardAction(async () => {
+      if (!user || !isValid) return;
+      setSaving(true);
+      setError('');
+      setSuccess('');
 
-    const exerciseData: Exercise[] = exercises.map((e) => ({
-      id: e.id,
-      name: e.name.trim(),
-      nameBg: e.nameBg.trim(),
-      muscleGroup: e.muscleGroup,
-      sets: parseInt(e.sets, 10) || 3,
-      reps: e.reps || '10',
-      restSeconds: parseInt(e.restSeconds, 10) || 60,
-    }));
+      const exerciseData: Exercise[] = exercises.map((e) => ({
+        id: e.id,
+        name: e.name.trim(),
+        nameBg: e.nameBg.trim(),
+        muscleGroup: e.muscleGroup,
+        sets: parseInt(e.sets, 10) || 3,
+        reps: e.reps || '10',
+        restSeconds: parseInt(e.restSeconds, 10) || 60,
+      }));
 
-    const workoutData = {
-      name: name.trim(),
-      nameBg: nameBg.trim(),
-      description: description.trim(),
-      descriptionBg: descriptionBg.trim(),
-      difficulty,
-      durationMinutes: parseInt(duration, 10) || 30,
-      muscleGroups,
-      exercises: exerciseData,
-      isPublic,
-    };
+      const workoutData = {
+        name: name.trim(),
+        nameBg: nameBg.trim(),
+        description: description.trim(),
+        descriptionBg: descriptionBg.trim(),
+        difficulty,
+        durationMinutes: parseInt(duration, 10) || 30,
+        muscleGroups,
+        exercises: exerciseData,
+        isPublic,
+      };
 
-    let result;
-    if (editId) {
-      result = await updateCustomWorkout(editId, workoutData);
-    } else {
-      result = await createCustomWorkout({ ...workoutData, creatorId: user.id });
-    }
+      let result;
+      if (editId) {
+        result = await updateCustomWorkout(editId, workoutData);
+      } else {
+        result = await createCustomWorkout({ ...workoutData, creatorId: user.id });
+      }
 
-    setSaving(false);
+      setSaving(false);
 
-    if (result.error) {
-      setError(t('builder.saveError'));
-    } else {
-      setSuccess(t('builder.saved'));
-      setTimeout(() => router.back(), 800);
-    }
-  }, [user, isValid, exercises, name, nameBg, description, descriptionBg, difficulty, duration, muscleGroups, isPublic, editId, router, t]);
+      if (result.error) {
+        setError(t('builder.saveError'));
+      } else {
+        setSuccess(t('builder.saved'));
+        setTimeout(() => router.back(), 800);
+      }
+    });
+  }, [user, isValid, exercises, name, nameBg, description, descriptionBg, difficulty, duration, muscleGroups, isPublic, editId, router, t, guardAction]);
 
   return {
     name, setName,

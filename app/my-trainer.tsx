@@ -11,6 +11,7 @@ import { useBreakpoint } from '../src/hooks/useBreakpoint';
 import { useAsyncData } from '../src/hooks/useAsyncData';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
+import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import { redeemInviteCode, getClientTrainer, removeConnection } from '../src/lib/trainerService';
 import type { TrainerClient } from '../src/types';
 
@@ -51,6 +52,7 @@ export default function MyTrainerScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
+  const { guardAction } = useOfflineGuard();
 
   const [code, setCode] = useState('');
   const [connecting, setConnecting] = useState(false);
@@ -68,48 +70,52 @@ export default function MyTrainerScreen() {
     enabled: !!user,
   });
 
-  const handleConnect = async () => {
-    if (!code.trim() || code.trim().length < 6) return;
-    setConnecting(true);
-    setFormError('');
-    setSuccess('');
+  const handleConnect = () => {
+    guardAction(async () => {
+      if (!code.trim() || code.trim().length < 6) return;
+      setConnecting(true);
+      setFormError('');
+      setSuccess('');
 
-    const result = await redeemInviteCode(code.trim());
-    setConnecting(false);
+      const result = await redeemInviteCode(code.trim());
+      setConnecting(false);
 
-    if (result.success) {
-      setSuccess(t('client.connected'));
-      setCode('');
-      retry();
-    } else {
-      const errorKey = result.error === 'invalid_code' ? 'client.errorInvalidCode'
-        : result.error === 'already_connected' ? 'client.errorAlreadyConnected'
-        : result.error === 'only_clients' ? 'client.errorOnlyClients'
-        : 'client.errorUnknown';
-      setFormError(t(errorKey));
-    }
+      if (result.success) {
+        setSuccess(t('client.connected'));
+        setCode('');
+        retry();
+      } else {
+        const errorKey = result.error === 'invalid_code' ? 'client.errorInvalidCode'
+          : result.error === 'already_connected' ? 'client.errorAlreadyConnected'
+          : result.error === 'only_clients' ? 'client.errorOnlyClients'
+          : 'client.errorUnknown';
+        setFormError(t(errorKey));
+      }
+    });
   };
 
   const handleDisconnect = () => {
     if (!trainer) return;
 
-    const doDisconnect = async () => {
-      const result = await removeConnection(trainer.id);
-      if (result.error) {
-        Alert.alert(t('common.error'), result.error);
-        return;
-      }
-      setSuccess(t('client.disconnected'));
-      retry();
-    };
+    guardAction(() => {
+      const doDisconnect = async () => {
+        const result = await removeConnection(trainer.id);
+        if (result.error) {
+          Alert.alert(t('common.error'), result.error);
+          return;
+        }
+        setSuccess(t('client.disconnected'));
+        retry();
+      };
 
-    confirmAction(
-      t('client.disconnect'),
-      t('client.disconnectConfirm'),
-      t('client.disconnect'),
-      t('common.cancel'),
-      doDisconnect,
-    );
+      confirmAction(
+        t('client.disconnect'),
+        t('client.disconnectConfirm'),
+        t('client.disconnect'),
+        t('common.cancel'),
+        doDisconnect,
+      );
+    });
   };
 
   const formatDate = (dateStr: string) => {
