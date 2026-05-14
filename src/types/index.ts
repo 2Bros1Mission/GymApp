@@ -194,6 +194,41 @@ export interface WorkoutAssignment {
   trainerName?: string;
 }
 
+export interface WorkoutFeedback {
+  id: string;
+  workoutLogId: string;
+  trainerId: string;
+  trainerName?: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface WorkoutDetail {
+  id: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number | null;
+  completed: boolean;
+  notes: string | null;
+  exercises: WorkoutDetailExercise[];
+  feedback: WorkoutFeedback[];
+}
+
+export interface WorkoutDetailExercise {
+  id: string;
+  exerciseName: string;
+  orderIndex: number;
+  sets: WorkoutDetailSet[];
+}
+
+export interface WorkoutDetailSet {
+  id: string;
+  setNumber: number;
+  weight: number;
+  reps: number;
+  completed: boolean;
+}
+
 export interface TrainerClient {
   id: string;
   trainerId: string;

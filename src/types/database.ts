@@ -500,6 +500,45 @@ export type Database = {
           },
         ]
       }
+      workout_feedback: {
+        Row: {
+          id: string
+          workout_log_id: string
+          trainer_id: string
+          message: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workout_log_id: string
+          trainer_id: string
+          message: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          workout_log_id?: string
+          trainer_id?: string
+          message?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_feedback_workout_log_id_fkey"
+            columns: ["workout_log_id"]
+            isOneToOne: false
+            referencedRelation: "workout_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_feedback_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_logs: {
         Row: {
           completed: boolean
