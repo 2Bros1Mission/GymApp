@@ -229,28 +229,6 @@ export interface WorkoutDetailSet {
   completed: boolean;
 }
 
-export interface Conversation {
-  id: string;
-  trainerId: string;
-  clientId: string;
-  lastMessageAt: string;
-  createdAt: string;
-  // Joined
-  otherUserName?: string;
-  otherUserEmail?: string;
-  lastMessageContent?: string;
-  unreadCount?: number;
-}
-
-export interface Message {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  content: string;
-  readAt: string | null;
-  createdAt: string;
-}
-
 export interface TrainerClient {
   id: string;
   trainerId: string;

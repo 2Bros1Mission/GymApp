@@ -150,15 +150,6 @@ export default function TrainerDashboardScreen() {
               <Text style={styles.quickActionText}>{t('dashboard.createWorkout')}</Text>
             </Pressable>
           </View>
-          <View style={[styles.quickActionsRow, { marginTop: 0 }]}>
-            <Pressable
-              style={styles.quickAction}
-              onPress={() => router.push('/conversations')}
-            >
-              <Ionicons name="chatbubbles-outline" size={18} color={colors.text} />
-              <Text style={styles.quickActionText}>{t('tab.messages')}</Text>
-            </Pressable>
-          </View>
 
           {/* Recent activity */}
           {!error && (

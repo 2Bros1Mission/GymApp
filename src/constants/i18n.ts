@@ -324,14 +324,6 @@ export const translations: Translations = {
     'validation.weightRange': 'Теглото трябва да е между 0 и 500 кг.',
     'validation.repsRange': 'Повторенията трябва да са между 1 и 999.',
 
-    'messages.title': 'Съобщения',
-    'messages.empty': 'Все още няма разговори. Започнете чат от страницата на клиент или треньор.',
-    'messages.noMessages': 'Няма съобщения',
-    'messages.placeholder': 'Напишете съобщение...',
-    'messages.startConversation': 'Напишете първото си съобщение!',
-    'messages.sendMessage': 'Изпрати съобщение',
-    'tab.messages': 'Съобщения',
-
     'clientProgress.totalWorkouts': 'Общо тренировки',
     'clientProgress.streak': 'Серия',
     'clientProgress.lastWorkout': 'Последна тренировка',
@@ -709,14 +701,6 @@ export const translations: Translations = {
     'validation.invalidInput': 'Invalid Input',
     'validation.weightRange': 'Weight must be between 0 and 500 kg.',
     'validation.repsRange': 'Reps must be between 1 and 999.',
-
-    'messages.title': 'Messages',
-    'messages.empty': 'No conversations yet. Start a chat from a client or trainer page.',
-    'messages.noMessages': 'No messages',
-    'messages.placeholder': 'Type a message...',
-    'messages.startConversation': 'Send your first message!',
-    'messages.sendMessage': 'Send Message',
-    'tab.messages': 'Messages',
 
     'clientProgress.totalWorkouts': 'Total Workouts',
     'clientProgress.streak': 'Streak',
