@@ -4,16 +4,6 @@ Reviewed 2026-05-14. Summary of security flaws, missing features, and code quali
 
 ---
 
-## PR #96 — fix: hide trainer email from client-side connection flow
-
-**Status:** LGTM (merged)
-
-| Severity | Finding |
-|----------|---------|
-| Low | Trainer email is still returned from the backend query (just unused in UI now). For full privacy, remove from the Supabase select/RPC response in a follow-up. |
-
----
-
 ## PR #97 — feat: show recent client workout activity on trainer dashboard
 
 **Status:** Merged. Has critical and high issues.
