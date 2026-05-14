@@ -170,7 +170,7 @@ export function Sidebar() {
       </View>
 
       <View style={styles.bottomSection}>
-        <View style={styles.profileRow}>
+        <Pressable style={styles.profileRow} onPress={() => router.push('/(tabs)/profile' as any)}>
           <View style={styles.avatar}>
             <Ionicons name="person" size={20} color={colors.white} />
           </View>
@@ -182,7 +182,7 @@ export function Sidebar() {
               {profile?.role === 'trainer' ? t('role.trainer') : t('role.client')}
             </Text>
           </View>
-        </View>
+        </Pressable>
 
         <Pressable style={styles.logoutBtn} onPress={signOut}>
           <Ionicons name="log-out-outline" size={20} color={colors.error} />
