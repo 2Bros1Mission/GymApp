@@ -138,6 +138,22 @@ export interface ClientProgress {
   weeklyActivity: boolean[]; // Mon–Sun, true = worked out
 }
 
+export interface WorkoutAssignment {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  workoutId: string;
+  assignedAt: string;
+  dueDate: string | null;
+  status: 'pending' | 'completed' | 'skipped';
+  completedAt: string | null;
+  notes: string | null;
+  workoutName?: string;
+  workoutNameBg?: string;
+  clientName?: string;
+  trainerName?: string;
+}
+
 export interface TrainerClient {
   id: string;
   trainerId: string;

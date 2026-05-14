@@ -1,16 +1,19 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { sampleWorkouts } from '../../src/data/workouts';
-import { DifficultyLevel, MuscleGroup, Workout } from '../../src/types';
+import { DifficultyLevel, MuscleGroup, Workout, WorkoutAssignment } from '../../src/types';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { SkeletonWorkoutCard } from '../../src/components/SkeletonLoader';
+import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
+import { getClientAssignments } from '../../src/lib/trainerService';
 
 const muscleGroupIcons: Record<MuscleGroup, React.ComponentProps<typeof Ionicons>['name']> = {
   chest: 'body',
@@ -62,6 +65,14 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   muscleChipText: { fontSize: 10, color: colors.textSecondary, fontWeight: '500' },
   cardRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   difficultyDot: { width: 8, height: 8, borderRadius: 4 },
+  assignedSection: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg },
+  assignedTitle: { fontSize: FontSize.lg, fontWeight: '700', color: colors.text, marginBottom: Spacing.md },
+  assignedCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.accent },
+  assignedCardName: { fontSize: FontSize.md, fontWeight: '700', color: colors.text },
+  assignedCardMeta: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  assignedCardDue: { fontSize: FontSize.xs, color: colors.accent, marginTop: 4, fontWeight: '600' },
+  startBtn: { backgroundColor: colors.primary, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+  startBtnText: { fontSize: FontSize.xs, fontWeight: '700', color: colors.white },
 });
 
 function WorkoutCard({ workout, onPress, colors }: { workout: Workout; onPress: () => void; colors: ColorPalette }) {
@@ -104,13 +115,27 @@ function WorkoutCard({ workout, onPress, colors }: { workout: Workout; onPress: 
 
 export default function WorkoutsScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const { user, profile } = useAuth();
   const [filter, setFilter] = useState<FilterType>('all');
   const [loading, setLoading] = useState(true);
   const breakpoint = useBreakpoint();
   const numColumns = breakpoint === 'lg' ? 3 : breakpoint === 'md' ? 2 : 1;
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  const isClient = profile?.role === 'client';
+
+  const assignmentsFetcher = useCallback(async (): Promise<WorkoutAssignment[]> => {
+    if (!user || !isClient) return [];
+    return getClientAssignments(user.id);
+  }, [user, isClient]);
+
+  const { data: assignments, loading: assignmentsLoading } = useFocusAsyncData({
+    fetcher: assignmentsFetcher,
+    defaultValue: [] as WorkoutAssignment[],
+    enabled: !!user && isClient,
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 300);
@@ -134,6 +159,43 @@ export default function WorkoutsScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>{t('workouts.title')}</Text>
         </View>
+
+        {/* Assigned workouts section for clients */}
+        {isClient && assignments.length > 0 && (
+          <View style={styles.assignedSection}>
+            <Text style={styles.assignedTitle}>{t('assignments.title')}</Text>
+            {assignments.map((a) => (
+              <Pressable
+                key={a.id}
+                style={styles.assignedCard}
+                onPress={() => router.push(`/workout/${a.workoutId}`)}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignedCardName}>
+                      {language === 'bg' && a.workoutNameBg ? a.workoutNameBg : a.workoutName ?? '--'}
+                    </Text>
+                    <Text style={styles.assignedCardMeta}>
+                      {t('assignments.fromTrainer', { name: a.trainerName ?? '--' })}
+                    </Text>
+                    {a.dueDate && (
+                      <Text style={styles.assignedCardDue}>
+                        {t('assignments.dueDateLabel', { date: new Date(a.dueDate).toLocaleDateString() })}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.startBtn}>
+                    <Text style={styles.startBtnText}>{t('assignments.start')}</Text>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {isClient && assignmentsLoading && (
+          <ActivityIndicator color={colors.primary} style={{ marginBottom: Spacing.md }} />
+        )}
 
         <ScrollView
           horizontal
