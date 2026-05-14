@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - uses: supabase/setup-cli@v1
         with:
@@ -21,15 +23,31 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Revoke unknown remote migrations
+      - name: Sync migration history
         run: |
-          # Get remote migration versions and revoke any not in local files
+          # Revoke remote versions that don't match local files
           remote_versions=$(supabase migration list 2>/dev/null | grep -oE '[0-9]{14}' || true)
           local_versions=$(ls supabase/migrations/*.sql 2>/dev/null | xargs -I{} basename {} .sql | grep -oE '^[0-9]+' || true)
           for rv in $remote_versions; do
             if ! echo "$local_versions" | grep -q "^${rv}$"; then
               echo "Revoking unknown remote migration: $rv"
               supabase migration repair --status reverted "$rv" || true
+            fi
+          done
+
+          # Find new migrations (added in this push)
+          new_files=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'supabase/migrations/*.sql' || true)
+          new_versions=""
+          for f in $new_files; do
+            v=$(basename "$f" .sql | grep -oE '^[0-9]+')
+            new_versions="$new_versions $v"
+          done
+
+          # Mark all existing local migrations as applied (except new ones)
+          for lv in $local_versions; do
+            if ! echo "$new_versions" | grep -q "$lv"; then
+              echo "Marking migration as applied: $lv"
+              supabase migration repair --status applied "$lv" 2>/dev/null || true
             fi
           done
         env:
@@ -39,5 +57,3 @@ jobs:
         run: supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-
