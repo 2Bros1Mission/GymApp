@@ -21,7 +21,23 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      - name: Revoke unknown remote migrations
+        run: |
+          # Get remote migration versions and revoke any not in local files
+          remote_versions=$(supabase migration list 2>/dev/null | grep -oE '[0-9]{14}' || true)
+          local_versions=$(ls supabase/migrations/*.sql 2>/dev/null | xargs -I{} basename {} .sql | grep -oE '^[0-9]+' || true)
+          for rv in $remote_versions; do
+            if ! echo "$local_versions" | grep -q "^${rv}$"; then
+              echo "Revoking unknown remote migration: $rv"
+              supabase migration repair --status reverted "$rv" || true
+            fi
+          done
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Push migrations
         run: supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+
