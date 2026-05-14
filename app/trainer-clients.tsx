@@ -281,7 +281,11 @@ export default function TrainerClientsScreen() {
           <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.lg }} />
         ) : !error && clients.length > 0 ? (
           clients.map((client) => (
-            <View key={client.id} style={styles.clientCard}>
+            <Pressable
+              key={client.id}
+              style={styles.clientCard}
+              onPress={() => router.push(`/client-progress?clientId=${client.clientId}`)}
+            >
               <View style={styles.clientAvatar}>
                 <Text style={styles.clientAvatarText}>
                   {(client.clientName ?? '?').charAt(0).toUpperCase()}
@@ -297,7 +301,7 @@ export default function TrainerClientsScreen() {
               <Pressable style={styles.removeBtn} onPress={() => handleRemoveClient(client)}>
                 <Ionicons name="close-circle-outline" size={24} color={colors.error} />
               </Pressable>
-            </View>
+            </Pressable>
           ))
         ) : !error ? (
           <View style={styles.emptyCard}>
