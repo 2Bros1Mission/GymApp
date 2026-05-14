@@ -30,7 +30,6 @@ export async function redeemInviteCode(code: string): Promise<{
   error?: string;
   connectionId?: string;
   trainerName?: string;
-  trainerEmail?: string;
 }> {
   const { data, error } = await supabase.rpc('redeem_invite_code', { p_code: code.toUpperCase() });
 
@@ -40,7 +39,6 @@ export async function redeemInviteCode(code: string): Promise<{
     error?: string;
     connection_id?: string;
     trainer_name?: string;
-    trainer_email?: string;
   } | null;
   if (!result?.success) return { success: false, error: result?.error ?? 'unknown' };
 
@@ -48,7 +46,6 @@ export async function redeemInviteCode(code: string): Promise<{
     success: true,
     connectionId: result.connection_id,
     trainerName: result.trainer_name,
-    trainerEmail: result.trainer_email,
   };
 }
 
@@ -138,7 +135,7 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
       status,
       client_confirmed,
       connected_at,
-      trainer:profiles!trainer_clients_trainer_id_fkey ( name, email )
+      trainer:profiles!trainer_clients_trainer_id_fkey ( name )
     `)
     .eq('client_id', clientId)
     .in('status', ['active', 'pending', 'rejected'])
@@ -158,7 +155,6 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
     clientConfirmed: data.client_confirmed,
     connectedAt: data.connected_at,
     trainerName: trainer?.name,
-    trainerEmail: trainer?.email,
   };
 }
 
