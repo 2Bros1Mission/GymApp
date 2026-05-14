@@ -1,4 +1,4 @@
-# PR Review Findings (PRs #96–#102, #105)
+# PR Review Findings (PRs #96–#102, #105, #107)
 
 Reviewed 2026-05-14. Summary of security flaws, missing features, and code quality issues.
 
@@ -116,6 +116,27 @@ export async function getRecentClientActivity(trainerId: string, limit = 30) {
 | Medium | **Missing error handling on `completeGoal`/`deleteGoal`** — No user feedback if operations fail. UI optimistically updates without confirming success. |
 | Medium | **NaN risk from `parseFloat`** — No validation that parsed goal values are numbers before use in calculations/display. |
 | Low | Missing loading states during goal operations. |
+
+---
+
+## PR #107 — feat: add workout feedback from trainer (#22)
+
+**Status:** Open. CI passes but Supabase Preview failing. Has high-severity RLS and validation issues.
+
+| Severity | Finding |
+|----------|---------|
+| High | **RLS SELECT policy too narrow** — "Trainers can read own feedback" only allows `trainer_id = auth.uid()`. If a client is reassigned or has history from a different trainer, the new trainer sees incomplete conversation. Policy should allow reading all feedback on connected client workouts (via `trainer_clients` join). |
+| High | **Missing `workoutLogId` validation** — Navigating to `/workout-detail` without the param shows a blank screen (no error, no redirect). `enabled: !!workoutLogId` prevents the fetch but leaves the user stuck. |
+| High | **No service-layer authorization guard** — `getWorkoutDetail` takes any `workoutLogId` with no app-level ownership check. RLS protects at DB level, but error UX is poor if someone hits a forbidden row. |
+| Medium | **Whitespace-only messages pass validation** — DB constraint checks `char_length(message) > 0` but doesn't trim. Direct API caller could insert whitespace-only feedback. Fix: `char_length(trim(message)) > 0`. |
+| Medium | **No optimistic update after sending feedback** — User must wait for full refetch to see their message. Adds perceptible delay. |
+| Medium | **Performance concern on INSERT policy** — `workout_logs JOIN trainer_clients` subquery runs on every insert. Verify composite index exists on `trainer_clients(trainer_id, client_id, status)`. |
+| Medium | **Timezone handling in `formatRelativeTime`** — Could show incorrect relative times if timestamp string lacks timezone indicator. |
+| Medium | **Unused `clientId` param** — Passed in navigation URL but never consumed in workout-detail screen. |
+| Low | No UPDATE/DELETE policies — feedback is append-only, trainers can't fix typos. |
+| Low | `EMPTY_DETAIL` relies on falsy empty string for render check — fragile pattern. |
+
+**Note:** Supabase Preview check is failing — likely a migration issue that needs investigation before merge.
 
 ---
 
