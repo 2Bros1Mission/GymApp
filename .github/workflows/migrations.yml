@@ -27,7 +27,7 @@ jobs:
         run: |
           # Revoke remote versions that don't match local files
           remote_versions=$(supabase migration list 2>/dev/null | grep -oE '[0-9]{14}' || true)
-          local_versions=$(ls supabase/migrations/*.sql 2>/dev/null | xargs -I{} basename {} .sql | grep -oE '^[0-9]+' || true)
+          local_versions=$(ls supabase/migrations/*.sql 2>/dev/null | xargs -I{} basename {} .sql | grep -oE '^[0-9]{14}' || true)
           for rv in $remote_versions; do
             if ! echo "$local_versions" | grep -q "^${rv}$"; then
               echo "Revoking unknown remote migration: $rv"
@@ -39,7 +39,7 @@ jobs:
           new_files=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- 'supabase/migrations/*.sql' || true)
           new_versions=""
           for f in $new_files; do
-            v=$(basename "$f" .sql | grep -oE '^[0-9]+')
+            v=$(basename "$f" .sql | grep -oE '^[0-9]{14}')
             new_versions="$new_versions $v"
           done
 
