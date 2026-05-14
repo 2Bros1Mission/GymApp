@@ -52,14 +52,5 @@ create policy "Trainers can view client body metrics"
     )
   );
 
--- Trainers can view their clients' profiles (name, weight, height, goal)
-create policy "Trainers can view client profiles"
-  on public.profiles for select
-  using (
-    exists (
-      select 1 from public.trainer_clients
-      where trainer_clients.trainer_id = auth.uid()
-        and trainer_clients.client_id = profiles.id
-        and trainer_clients.status = 'active'
-    )
-  );
+-- NOTE: Profile visibility policies moved to 004_fix_profile_visibility_rls.sql
+-- (covers both trainer→client and client→trainer directions, plus pending status)
