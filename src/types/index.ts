@@ -240,5 +240,4 @@ export interface TrainerClient {
   clientName?: string;
   clientEmail?: string;
   trainerName?: string;
-  trainerEmail?: string;
 }
