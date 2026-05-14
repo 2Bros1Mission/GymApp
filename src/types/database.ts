@@ -151,6 +151,7 @@ export type Database = {
           language: string
           name: string
           role: string
+          trainer_code: string | null
           updated_at: string
           weight: number | null
         }
@@ -164,6 +165,7 @@ export type Database = {
           language?: string
           name: string
           role?: string
+          trainer_code?: string | null
           updated_at?: string
           weight?: number | null
         }
@@ -177,6 +179,7 @@ export type Database = {
           language?: string
           name?: string
           role?: string
+          trainer_code?: string | null
           updated_at?: string
           weight?: number | null
         }

@@ -14,20 +14,19 @@ import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import {
-  createInviteCode,
-  getActiveInvites,
+  getTrainerCode,
   getTrainerClients,
   getPendingRequests,
   removeConnection,
   approveConnection,
   rejectConnection,
 } from '../src/lib/trainerService';
-import type { TrainerInvite, TrainerClient } from '../src/types';
+import type { TrainerClient } from '../src/types';
 
 interface ClientsData {
   clients: TrainerClient[];
   pendingRequests: TrainerClient[];
-  invites: TrainerInvite[];
+  trainerCode: string | null;
 }
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
@@ -80,45 +79,31 @@ export default function TrainerClientsScreen() {
 
   const { guardAction } = useOfflineGuard();
 
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fetcher = useCallback(async (): Promise<ClientsData> => {
-    if (!user) return { clients: [], pendingRequests: [], invites: [] };
-    const [clients, pendingRequests, invites] = await Promise.all([
+    if (!user) return { clients: [], pendingRequests: [], trainerCode: null };
+    const [clients, pendingRequests, trainerCode] = await Promise.all([
       getTrainerClients(user.id),
       getPendingRequests(user.id),
-      getActiveInvites(user.id),
+      getTrainerCode(user.id),
     ]);
-    return { clients, pendingRequests, invites };
+    return { clients, pendingRequests, trainerCode };
   }, [user]);
 
   const { data, loading, error, retry } = useAsyncData({
     fetcher,
-    defaultValue: { clients: [], pendingRequests: [], invites: [] } as ClientsData,
+    defaultValue: { clients: [], pendingRequests: [], trainerCode: null } as ClientsData,
     enabled: !!user,
   });
 
-  const { clients, pendingRequests, invites } = data;
-
-  const handleGenerateCode = () => {
-    guardAction(async () => {
-      if (!user) return;
-      setGenerating(true);
-      const { code, error: genError } = await createInviteCode(user.id);
-      setGenerating(false);
-      if (code) {
-        setGeneratedCode(code);
-        retry();
-      } else if (genError) {
-        Alert.alert(t('common.error'), genError);
-      }
-    });
-  };
+  const { clients, pendingRequests, trainerCode } = data;
 
   const handleCopyCode = async (code: string) => {
     try {
       await Clipboard.setStringAsync(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard not available on some platforms
     }
@@ -196,47 +181,21 @@ export default function TrainerClientsScreen() {
 
         {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
 
-        {/* Generate invite code */}
-        <Text style={styles.sectionTitle}>{t('trainer.inviteCode')}</Text>
+        {/* Permanent trainer code */}
+        <Text style={styles.sectionTitle}>{t('trainer.yourCode')}</Text>
 
-        <Pressable
-          style={styles.generateBtn}
-          onPress={handleGenerateCode}
-          disabled={generating}
-        >
-          {generating ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <>
-              <Ionicons name="add-circle" size={22} color={colors.white} />
-              <Text style={styles.generateBtnText}>{t('trainer.generateCode')}</Text>
-            </>
-          )}
-        </Pressable>
-
-        {generatedCode && (
+        {trainerCode ? (
           <View style={styles.codeCard}>
             <Text style={styles.codeLabel}>{t('trainer.shareCode')}</Text>
-            <Text style={styles.codeText}>{generatedCode}</Text>
-            <Text style={styles.codeExpiry}>{t('trainer.codeExpiry')}</Text>
-            <Pressable style={styles.copyBtn} onPress={() => handleCopyCode(generatedCode)}>
-              <Ionicons name="copy-outline" size={16} color={colors.primary} />
-              <Text style={styles.copyBtnText}>{t('trainer.codeCopied')}</Text>
+            <Text style={styles.codeText}>{trainerCode}</Text>
+            <Text style={styles.codeExpiry}>{t('trainer.yourCodeDescription')}</Text>
+            <Pressable style={styles.copyBtn} onPress={() => handleCopyCode(trainerCode)}>
+              <Ionicons name={copied ? 'checkmark-circle' : 'copy-outline'} size={16} color={colors.primary} />
+              <Text style={styles.copyBtnText}>{copied ? t('trainer.codeCopied') : t('trainer.copyCode')}</Text>
             </Pressable>
           </View>
-        )}
-
-        {/* Active invites */}
-        {invites.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>{t('trainer.activeInvites')}</Text>
-            {invites.map((inv) => (
-              <View key={inv.id} style={styles.inviteItem}>
-                <Text style={styles.inviteCode}>{inv.code}</Text>
-                <Text style={styles.inviteExpiry}>{formatDate(inv.expiresAt)}</Text>
-              </View>
-            ))}
-          </>
+        ) : (
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: Spacing.md }} />
         )}
 
         {/* Pending requests */}
