@@ -190,7 +190,7 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
       trainer:profiles!trainer_clients_trainer_id_fkey ( name, email )
     `)
     .eq('client_id', clientId)
-    .in('status', ['active', 'pending'])
+    .in('status', ['active', 'pending', 'rejected'])
     .order('connected_at', { ascending: false })
     .limit(1)
     .single();
