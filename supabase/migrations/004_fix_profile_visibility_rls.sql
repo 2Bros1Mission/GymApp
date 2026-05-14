@@ -7,6 +7,10 @@
 -- The Supabase foreign-key join in getTrainerClients/getPendingRequests/getClientTrainer
 -- silently returns null when RLS blocks the joined row, causing the UI to show '--'.
 
+-- Drop policies if they already exist (from original migration 003 or manual application)
+drop policy if exists "Trainers can view client profiles" on public.profiles;
+drop policy if exists "Clients can view trainer profiles" on public.profiles;
+
 -- Trainers can see profiles of their connected clients (active + pending)
 create policy "Trainers can view client profiles"
   on public.profiles for select
