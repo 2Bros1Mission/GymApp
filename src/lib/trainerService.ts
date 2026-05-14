@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress } from '../types';
+import type { TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress, RecentActivity } from '../types';
 import type { Tables, TablesUpdate, Json } from '../types/database';
 
 interface ProfileJoin {
@@ -342,6 +342,38 @@ export async function deleteCustomWorkout(workoutId: string): Promise<{ error?: 
 
   if (error) return { error: error.message };
   return {};
+}
+
+// ─── Recent Client Activity ────────────────────────────────────────
+
+export async function getRecentClientActivity(trainerId: string, limit = 30): Promise<RecentActivity[]> {
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select(`
+      id,
+      workout_name,
+      date,
+      duration_seconds,
+      user_id,
+      client:profiles!workout_logs_user_id_fkey ( name )
+    `)
+    .eq('completed', true)
+    .order('date', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const client = row.client as unknown as { name: string } | null;
+    return {
+      id: row.id,
+      clientId: row.user_id,
+      clientName: client?.name ?? '--',
+      workoutName: row.workout_name,
+      date: row.date,
+      durationSeconds: row.duration_seconds,
+    };
+  });
 }
 
 // ─── Client Progress Monitoring ─────────────────────────────────────

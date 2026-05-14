@@ -156,6 +156,8 @@ export const translations: Translations = {
     'dashboard.recentClients': 'Последни клиенти',
     'dashboard.seeAll': 'Виж всички',
     'dashboard.myPrograms': 'Моите програми',
+    'dashboard.recentActivity': 'Последна активност',
+    'dashboard.noActivity': 'Няма скорошна активност',
 
     'trainer.myClients': 'Моите клиенти',
     'trainer.yourCode': 'Твоят код',
@@ -450,6 +452,8 @@ export const translations: Translations = {
     'dashboard.recentClients': 'Recent Clients',
     'dashboard.seeAll': 'See All',
     'dashboard.myPrograms': 'My Programs',
+    'dashboard.recentActivity': 'Recent Activity',
+    'dashboard.noActivity': 'No recent activity',
 
     'trainer.myClients': 'My Clients',
     'trainer.yourCode': 'Your Code',

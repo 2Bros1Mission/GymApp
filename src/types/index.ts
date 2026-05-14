@@ -114,6 +114,15 @@ export interface ClientBodyMetric {
   weight: number | null;
 }
 
+export interface RecentActivity {
+  id: string;
+  clientId: string;
+  clientName: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number | null;
+}
+
 export interface ClientProgress {
   clientId: string;
   clientName: string;
