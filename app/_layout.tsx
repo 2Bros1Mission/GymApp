@@ -58,7 +58,7 @@ function RootLayoutNav() {
     } else if (session && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, segments]);
+  }, [session, loading, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (

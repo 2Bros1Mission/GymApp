@@ -95,7 +95,7 @@ export function useFocusAsyncData<T>(
         setLoading(false);
       }
     }
-  }, [options.fetcher, options.enabled]);
+  }, [options.fetcher, options.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFocusEffect(useCallback(() => {
     execute();
