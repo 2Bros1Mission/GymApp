@@ -473,7 +473,7 @@ function calculateStreak(workoutDates: string[]): number {
   for (let i = 1; i < uniqueDates.length; i++) {
     const prev = new Date(uniqueDates[i - 1]);
     const curr = new Date(uniqueDates[i]);
-    const diffDays = (prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24);
+    const diffDays = Math.round((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays === 1) {
       streak++;
     } else {
@@ -491,13 +491,13 @@ function getWeeklyActivity(workoutDates: string[]): boolean[] {
   const dayOfWeek = today.getDay(); // 0=Sun
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
+  monday.setHours(12, 0, 0, 0);
 
   const activity: boolean[] = [false, false, false, false, false, false, false];
   for (const d of workoutDates) {
     const date = new Date(d);
-    date.setHours(0, 0, 0, 0);
-    const diff = Math.floor((date.getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));
+    date.setHours(12, 0, 0, 0);
+    const diff = Math.round((date.getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));
     if (diff >= 0 && diff < 7) {
       activity[diff] = true;
     }
@@ -509,10 +509,15 @@ function getWeeklyActivity(workoutDates: string[]): boolean[] {
  * Get full client progress data for the detail screen.
  */
 export async function getClientProgress(clientId: string): Promise<ClientProgress> {
-  const [profile, workouts, metrics] = await Promise.all([
+  const [profile, workouts, metrics, countResult] = await Promise.all([
     getClientProfile(clientId),
     getClientWorkoutLogs(clientId, 50),
     getClientBodyMetrics(clientId, 30),
+    supabase
+      .from('workout_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', clientId)
+      .eq('completed', true),
   ]);
 
   const workoutDates = workouts.map((w) => w.date);
@@ -526,7 +531,7 @@ export async function getClientProgress(clientId: string): Promise<ClientProgres
     weight: profile.weight,
     height: profile.height,
     goal: profile.goal as ClientProgress['goal'],
-    totalWorkouts: workouts.length,
+    totalWorkouts: countResult.count ?? workouts.length,
     currentStreak: streak,
     lastWorkoutDate: workouts.length > 0 ? workouts[0].date : null,
     recentWorkouts: workouts.slice(0, 10),
