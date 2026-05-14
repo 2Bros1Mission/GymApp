@@ -222,6 +222,7 @@ export type Database = {
       }
       trainer_clients: {
         Row: {
+          client_confirmed: boolean
           client_id: string
           connected_at: string
           id: string
@@ -229,6 +230,7 @@ export type Database = {
           trainer_id: string
         }
         Insert: {
+          client_confirmed?: boolean
           client_id: string
           connected_at?: string
           id?: string
@@ -236,6 +238,7 @@ export type Database = {
           trainer_id: string
         }
         Update: {
+          client_confirmed?: boolean
           client_id?: string
           connected_at?: string
           id?: string
@@ -359,7 +362,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_connection: { Args: { p_connection_id: string }; Returns: Json }
+      confirm_connection: { Args: { p_connection_id: string }; Returns: Json }
       redeem_invite_code: { Args: { p_code: string }; Returns: Json }
+      reject_connection: { Args: { p_connection_id: string }; Returns: Json }
       save_workout: {
         Args: {
           p_duration_seconds: number

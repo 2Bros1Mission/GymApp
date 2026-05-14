@@ -12,7 +12,7 @@ import { useAsyncData } from '../src/hooks/useAsyncData';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
-import { redeemInviteCode, getClientTrainer, removeConnection } from '../src/lib/trainerService';
+import { redeemInviteCode, getClientTrainer, removeConnection, confirmConnection } from '../src/lib/trainerService';
 import type { TrainerClient } from '../src/types';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
@@ -42,7 +42,22 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   successText: { fontSize: FontSize.sm, color: colors.success, flex: 1 },
   errorBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.error + '15', borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.md },
   errorText: { fontSize: FontSize.sm, color: colors.error, flex: 1 },
+  pendingCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.warning + '40' },
+  pendingBadge: { backgroundColor: colors.warning + '20', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
+  pendingBadgeText: { fontSize: FontSize.xs, fontWeight: '600', color: colors.warning },
+  confirmCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.primary + '40' },
+  confirmBtnRow: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.sm },
+  confirmBtn: { backgroundColor: colors.primary, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, alignItems: 'center' },
+  confirmBtnText: { fontSize: FontSize.md, fontWeight: '700', color: colors.white },
+  cancelBtn: { backgroundColor: colors.surface, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  cancelBtnText: { fontSize: FontSize.md, fontWeight: '600', color: colors.text },
 });
+
+interface PendingConfirmation {
+  connectionId: string;
+  trainerName: string;
+  trainerEmail: string;
+}
 
 export default function MyTrainerScreen() {
   const router = useRouter();
@@ -56,8 +71,10 @@ export default function MyTrainerScreen() {
 
   const [code, setCode] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [success, setSuccess] = useState('');
   const [formError, setFormError] = useState('');
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
 
   const fetcher = useCallback(async (): Promise<TrainerClient | null> => {
     if (!user) return null;
@@ -81,9 +98,12 @@ export default function MyTrainerScreen() {
       setConnecting(false);
 
       if (result.success) {
-        setSuccess(t('client.connected'));
+        setPendingConfirmation({
+          connectionId: result.connectionId!,
+          trainerName: result.trainerName ?? '--',
+          trainerEmail: result.trainerEmail ?? '',
+        });
         setCode('');
-        retry();
       } else {
         const errorKey = result.error === 'invalid_code' ? 'client.errorInvalidCode'
           : result.error === 'already_connected' ? 'client.errorAlreadyConnected'
@@ -91,6 +111,33 @@ export default function MyTrainerScreen() {
           : 'client.errorUnknown';
         setFormError(t(errorKey));
       }
+    });
+  };
+
+  const handleConfirm = () => {
+    guardAction(async () => {
+      if (!pendingConfirmation) return;
+      setConfirming(true);
+
+      const result = await confirmConnection(pendingConfirmation.connectionId);
+      setConfirming(false);
+
+      if (result.success) {
+        setPendingConfirmation(null);
+        setSuccess(t('client.pendingApproval'));
+        retry();
+      } else {
+        setFormError(result.error ?? t('client.errorUnknown'));
+      }
+    });
+  };
+
+  const handleCancelConfirmation = () => {
+    guardAction(async () => {
+      if (!pendingConfirmation) return;
+      await removeConnection(pendingConfirmation.connectionId);
+      setPendingConfirmation(null);
+      retry();
     });
   };
 
@@ -123,6 +170,143 @@ export default function MyTrainerScreen() {
     return d.toLocaleDateString();
   };
 
+  const renderTrainerContent = () => {
+    if (loading) {
+      return <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xxl }} />;
+    }
+
+    if (error) {
+      return <ErrorCard message={error} onRetry={retry} loading={loading} />;
+    }
+
+    // Show confirmation card if user just entered a code
+    if (pendingConfirmation) {
+      return (
+        <>
+          <Text style={styles.sectionTitle}>{t('client.confirmConnection')}</Text>
+          <View style={styles.confirmCard}>
+            <View style={styles.trainerAvatar}>
+              <Text style={styles.trainerAvatarText}>
+                {pendingConfirmation.trainerName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.trainerName}>{pendingConfirmation.trainerName}</Text>
+            <Text style={styles.trainerEmail}>{pendingConfirmation.trainerEmail}</Text>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.sm }}>
+              {t('client.confirmPrompt').replace('{name}', pendingConfirmation.trainerName)}
+            </Text>
+            <View style={styles.confirmBtnRow}>
+              <Pressable style={styles.cancelBtn} onPress={handleCancelConfirmation}>
+                <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
+              </Pressable>
+              <Pressable style={[styles.confirmBtn, confirming && styles.connectBtnDisabled]} onPress={handleConfirm} disabled={confirming}>
+                {confirming ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.confirmBtnText}>{t('client.confirm')}</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </>
+      );
+    }
+
+    // Active connection
+    if (trainer && trainer.status === 'active') {
+      return (
+        <>
+          <Text style={styles.sectionTitle}>{t('client.myTrainer')}</Text>
+          <View style={styles.trainerCard}>
+            <View style={styles.trainerAvatar}>
+              <Text style={styles.trainerAvatarText}>
+                {(trainer.trainerName ?? '?').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.trainerName}>{trainer.trainerName ?? '--'}</Text>
+            <Text style={styles.trainerEmail}>{trainer.trainerEmail ?? ''}</Text>
+            <Text style={styles.trainerDate}>
+              {t('trainer.connectedSince')} {formatDate(trainer.connectedAt)}
+            </Text>
+            <Pressable style={styles.disconnectBtn} onPress={handleDisconnect}>
+              <Ionicons name="close-circle-outline" size={18} color={colors.error} />
+              <Text style={styles.disconnectBtnText}>{t('client.disconnect')}</Text>
+            </Pressable>
+          </View>
+        </>
+      );
+    }
+
+    // Pending connection (client confirmed, waiting on trainer)
+    if (trainer && trainer.status === 'pending' && trainer.clientConfirmed) {
+      return (
+        <>
+          <Text style={styles.sectionTitle}>{t('client.myTrainer')}</Text>
+          <View style={styles.pendingCard}>
+            <View style={styles.trainerAvatar}>
+              <Text style={styles.trainerAvatarText}>
+                {(trainer.trainerName ?? '?').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.trainerName}>{trainer.trainerName ?? '--'}</Text>
+            <Text style={styles.trainerEmail}>{trainer.trainerEmail ?? ''}</Text>
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>{t('client.pendingApproval')}</Text>
+            </View>
+            <Pressable style={styles.disconnectBtn} onPress={handleDisconnect}>
+              <Ionicons name="close-circle-outline" size={18} color={colors.error} />
+              <Text style={styles.disconnectBtnText}>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
+        </>
+      );
+    }
+
+    // Pending connection (code entered but not yet confirmed by client — edge case)
+    if (trainer && trainer.status === 'pending' && !trainer.clientConfirmed) {
+      setPendingConfirmation({
+        connectionId: trainer.id,
+        trainerName: trainer.trainerName ?? '--',
+        trainerEmail: trainer.trainerEmail ?? '',
+      });
+      return null;
+    }
+
+    // No trainer — show code entry
+    return (
+      <>
+        <View style={styles.emptyCard}>
+          <Ionicons name="person-add-outline" size={40} color={colors.textMuted} />
+          <Text style={styles.emptyText}>{t('client.noTrainer')}</Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>{t('client.enterCode')}</Text>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.codeInput}
+            value={code}
+            onChangeText={(v) => { setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)); setFormError(''); setSuccess(''); }}
+            placeholder={t('client.codePlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="characters"
+            maxLength={6}
+          />
+          <Pressable
+            style={[styles.connectBtn, (connecting || code.length < 6) && styles.connectBtnDisabled]}
+            onPress={handleConnect}
+            disabled={connecting || code.length < 6}
+          >
+            {connecting ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <Text style={styles.connectBtnText}>{t('client.connect')}</Text>
+            )}
+          </Pressable>
+        </View>
+      </>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -152,62 +336,7 @@ export default function MyTrainerScreen() {
           </View>
         )}
 
-        {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
-
-        {loading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xxl }} />
-        ) : !error && trainer ? (
-          <>
-            <Text style={styles.sectionTitle}>{t('client.myTrainer')}</Text>
-            <View style={styles.trainerCard}>
-              <View style={styles.trainerAvatar}>
-                <Text style={styles.trainerAvatarText}>
-                  {(trainer.trainerName ?? '?').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.trainerName}>{trainer.trainerName ?? '--'}</Text>
-              <Text style={styles.trainerEmail}>{trainer.trainerEmail ?? ''}</Text>
-              <Text style={styles.trainerDate}>
-                {t('trainer.connectedSince')} {formatDate(trainer.connectedAt)}
-              </Text>
-              <Pressable style={styles.disconnectBtn} onPress={handleDisconnect}>
-                <Ionicons name="close-circle-outline" size={18} color={colors.error} />
-                <Text style={styles.disconnectBtnText}>{t('client.disconnect')}</Text>
-              </Pressable>
-            </View>
-          </>
-        ) : !error ? (
-          <>
-            <View style={styles.emptyCard}>
-              <Ionicons name="person-add-outline" size={40} color={colors.textMuted} />
-              <Text style={styles.emptyText}>{t('client.noTrainer')}</Text>
-            </View>
-
-            <Text style={styles.sectionTitle}>{t('client.enterCode')}</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.codeInput}
-                value={code}
-                onChangeText={(v) => { setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)); setFormError(''); setSuccess(''); }}
-                placeholder={t('client.codePlaceholder')}
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="characters"
-                maxLength={6}
-              />
-              <Pressable
-                style={[styles.connectBtn, (connecting || code.length < 6) && styles.connectBtnDisabled]}
-                onPress={handleConnect}
-                disabled={connecting || code.length < 6}
-              >
-                {connecting ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text style={styles.connectBtnText}>{t('client.connect')}</Text>
-                )}
-              </Pressable>
-            </View>
-          </>
-        ) : null}
+        {renderTrainerContent()}
       </ScrollView>
     </SafeAreaView>
   );
