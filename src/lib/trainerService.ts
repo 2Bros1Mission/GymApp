@@ -1,5 +1,11 @@
 import { supabase } from './supabase';
 import type { TrainerInvite, TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel } from '../types';
+import type { Tables, TablesUpdate, Json } from '../types/database';
+
+interface ProfileJoin {
+  name: string;
+  email: string;
+}
 
 /**
  * Generate a random 6-character alphanumeric invite code.
@@ -53,13 +59,13 @@ export async function getActiveInvites(trainerId: string): Promise<TrainerInvite
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     id: row.id,
     trainerId: row.trainer_id,
     code: row.code,
     expiresAt: row.expires_at,
     used: row.used,
-    usedBy: row.used_by,
+    usedBy: row.used_by ?? undefined,
     createdAt: row.created_at,
   }));
 }
@@ -71,7 +77,8 @@ export async function redeemInviteCode(code: string): Promise<{ success: boolean
   const { data, error } = await supabase.rpc('redeem_invite_code', { p_code: code.toUpperCase() });
 
   if (error) return { success: false, error: error.message };
-  if (!data?.success) return { success: false, error: data?.error ?? 'unknown' };
+  const result = data as unknown as { success?: boolean; error?: string } | null;
+  if (!result?.success) return { success: false, error: result?.error ?? 'unknown' };
 
   return { success: true };
 }
@@ -96,15 +103,18 @@ export async function getTrainerClients(trainerId: string): Promise<TrainerClien
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    trainerId: row.trainer_id,
-    clientId: row.client_id,
-    status: row.status,
-    connectedAt: row.connected_at,
-    clientName: row.client?.name,
-    clientEmail: row.client?.email,
-  }));
+  return (data ?? []).map((row) => {
+    const client = row.client as unknown as ProfileJoin | null;
+    return {
+      id: row.id,
+      trainerId: row.trainer_id,
+      clientId: row.client_id,
+      status: row.status as 'active' | 'removed',
+      connectedAt: row.connected_at,
+      clientName: client?.name,
+      clientEmail: client?.email,
+    };
+  });
 }
 
 /**
@@ -129,14 +139,15 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
   if (error && error.code !== 'PGRST116') throw new Error(error.message);
   if (!data) return null;
 
+  const trainer = data.trainer as unknown as ProfileJoin | null;
   return {
     id: data.id,
     trainerId: data.trainer_id,
     clientId: data.client_id,
-    status: data.status,
+    status: data.status as 'active' | 'removed',
     connectedAt: data.connected_at,
-    trainerName: (data as any).trainer?.name,
-    trainerEmail: (data as any).trainer?.email,
+    trainerName: trainer?.name,
+    trainerEmail: trainer?.email,
   };
 }
 
@@ -155,7 +166,7 @@ export async function removeConnection(connectionId: string): Promise<{ error?: 
 
 // ─── Custom Workout CRUD ─────────────────────────────────────────────
 
-function mapRowToCustomWorkout(row: any): CustomWorkout {
+function mapRowToCustomWorkout(row: Tables<'custom_workouts'>): CustomWorkout {
   return {
     id: row.id,
     creatorId: row.creator_id,
@@ -166,7 +177,7 @@ function mapRowToCustomWorkout(row: any): CustomWorkout {
     difficulty: row.difficulty as DifficultyLevel,
     durationMinutes: row.duration_minutes,
     muscleGroups: (row.muscle_groups ?? []) as MuscleGroup[],
-    exercises: (row.exercises ?? []) as Exercise[],
+    exercises: (row.exercises ?? []) as unknown as Exercise[],
     isPublic: row.is_public,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -229,7 +240,7 @@ export async function createCustomWorkout(workout: {
       difficulty: workout.difficulty,
       duration_minutes: workout.durationMinutes,
       muscle_groups: workout.muscleGroups,
-      exercises: workout.exercises,
+      exercises: workout.exercises as unknown as Json,
       is_public: workout.isPublic,
     })
     .select('id')
@@ -253,7 +264,7 @@ export async function updateCustomWorkout(workoutId: string, updates: {
   exercises?: Exercise[];
   isPublic?: boolean;
 }): Promise<{ error?: string }> {
-  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const row: TablesUpdate<'custom_workouts'> = { updated_at: new Date().toISOString() };
   if (updates.name !== undefined) row.name = updates.name;
   if (updates.nameBg !== undefined) row.name_bg = updates.nameBg;
   if (updates.description !== undefined) row.description = updates.description;
@@ -261,7 +272,7 @@ export async function updateCustomWorkout(workoutId: string, updates: {
   if (updates.difficulty !== undefined) row.difficulty = updates.difficulty;
   if (updates.durationMinutes !== undefined) row.duration_minutes = updates.durationMinutes;
   if (updates.muscleGroups !== undefined) row.muscle_groups = updates.muscleGroups;
-  if (updates.exercises !== undefined) row.exercises = updates.exercises;
+  if (updates.exercises !== undefined) row.exercises = updates.exercises as unknown as Json;
   if (updates.isPublic !== undefined) row.is_public = updates.isPublic;
 
   const { error } = await supabase

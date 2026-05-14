@@ -136,7 +136,7 @@ export function Sidebar() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const activeSegment = segments[1] ?? 'index';
+  const activeSegment = (segments as string[])[1] ?? 'index';
   const isTrainer = profile?.role === 'trainer';
   const navItems = isTrainer ? TRAINER_NAV_ITEMS : CLIENT_NAV_ITEMS;
 

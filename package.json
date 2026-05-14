@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "preview:web": "expo export --platform web && npx serve dist -s",
+    "gen:types": "supabase gen types typescript --project-id ivmvyohjzlunkwkutmlh --schema public > src/types/database.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },
