@@ -48,6 +48,8 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   rejectedCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.error + '40' },
   rejectedBadge: { backgroundColor: colors.error + '20', paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
   rejectedBadgeText: { fontSize: FontSize.xs, fontWeight: '600', color: colors.error },
+  rejectedMessage: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  confirmPromptText: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.sm },
   tryAnotherBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.primary, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, marginTop: Spacing.sm },
   tryAnotherBtnText: { fontSize: FontSize.sm, fontWeight: '700', color: colors.white },
   confirmCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.lg, alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: colors.primary + '40' },
@@ -173,7 +175,11 @@ export default function MyTrainerScreen() {
   const handleDismissRejection = () => {
     guardAction(async () => {
       if (!trainer) return;
-      await removeConnection(trainer.id);
+      const result = await removeConnection(trainer.id);
+      if (result.error) {
+        Alert.alert(t('common.error'), result.error);
+        return;
+      }
       retry();
     });
   };
@@ -205,8 +211,8 @@ export default function MyTrainerScreen() {
             </View>
             <Text style={styles.trainerName}>{pendingConfirmation.trainerName}</Text>
             <Text style={styles.trainerEmail}>{pendingConfirmation.trainerEmail}</Text>
-            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.sm }}>
-              {t('client.confirmPrompt').replace('{name}', pendingConfirmation.trainerName)}
+            <Text style={styles.confirmPromptText}>
+              {t('client.confirmPrompt', { name: pendingConfirmation.trainerName })}
             </Text>
             <View style={styles.confirmBtnRow}>
               <Pressable style={styles.cancelBtn} onPress={handleCancelConfirmation}>
@@ -295,8 +301,8 @@ export default function MyTrainerScreen() {
             <View style={styles.rejectedBadge}>
               <Text style={styles.rejectedBadgeText}>{t('client.rejected')}</Text>
             </View>
-            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
-              {t('client.rejectedMessage').replace('{name}', trainer.trainerName ?? '--')}
+            <Text style={styles.rejectedMessage}>
+              {t('client.rejectedMessage', { name: trainer.trainerName ?? '--' })}
             </Text>
             <Pressable style={styles.tryAnotherBtn} onPress={handleDismissRejection}>
               <Ionicons name="refresh" size={18} color={colors.white} />
