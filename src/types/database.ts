@@ -368,6 +368,138 @@ export type Database = {
           },
         ]
       }
+      client_goals: {
+        Row: {
+          id: string
+          client_id: string
+          goal_type: string
+          title: string
+          target_value: number | null
+          current_value: number | null
+          unit: string | null
+          exercise_name: string | null
+          deadline: string | null
+          status: string
+          created_at: string
+          updated_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          goal_type: string
+          title: string
+          target_value?: number | null
+          current_value?: number | null
+          unit?: string | null
+          exercise_name?: string | null
+          deadline?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          goal_type?: string
+          title?: string
+          target_value?: number | null
+          current_value?: number | null
+          unit?: string | null
+          exercise_name?: string | null
+          deadline?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_goals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_suggestions: {
+        Row: {
+          id: string
+          trainer_id: string
+          client_id: string
+          target_goal_id: string | null
+          suggestion_type: string
+          goal_type: string
+          title: string
+          target_value: number | null
+          unit: string | null
+          exercise_name: string | null
+          deadline: string | null
+          message: string | null
+          status: string
+          client_response_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          trainer_id: string
+          client_id: string
+          target_goal_id?: string | null
+          suggestion_type: string
+          goal_type: string
+          title: string
+          target_value?: number | null
+          unit?: string | null
+          exercise_name?: string | null
+          deadline?: string | null
+          message?: string | null
+          status?: string
+          client_response_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          trainer_id?: string
+          client_id?: string
+          target_goal_id?: string | null
+          suggestion_type?: string
+          goal_type?: string
+          title?: string
+          target_value?: number | null
+          unit?: string | null
+          exercise_name?: string | null
+          deadline?: string | null
+          message?: string | null
+          status?: string
+          client_response_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_suggestions_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_suggestions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_suggestions_target_goal_id_fkey"
+            columns: ["target_goal_id"]
+            isOneToOne: false
+            referencedRelation: "client_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_logs: {
         Row: {
           completed: boolean
