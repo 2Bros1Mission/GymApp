@@ -1,16 +1,24 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTranslation } from '../src/contexts/LanguageContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { useBreakpoint } from '../src/hooks/useBreakpoint';
+import { useAsyncData } from '../src/hooks/useAsyncData';
+import { ErrorCard } from '../src/components/ErrorCard';
+import { confirmAction } from '../src/lib/confirm';
 import { createInviteCode, getActiveInvites, getTrainerClients, removeConnection } from '../src/lib/trainerService';
 import type { TrainerInvite, TrainerClient } from '../src/types';
+
+interface ClientsData {
+  clients: TrainerClient[];
+  invites: TrainerInvite[];
+}
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -45,48 +53,43 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
 
 export default function TrainerClientsScreen() {
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
 
-  const [clients, setClients] = useState<TrainerClient[]>([]);
-  const [invites, setInvites] = useState<TrainerInvite[]>([]);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const [c, i] = await Promise.all([
-        getTrainerClients(user.id),
-        getActiveInvites(user.id),
-      ]);
-      setClients(c);
-      setInvites(i);
-    } catch (err) {
-      console.error('Failed to load trainer data:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetcher = useCallback(async (): Promise<ClientsData> => {
+    if (!user) return { clients: [], invites: [] };
+    const [clients, invites] = await Promise.all([
+      getTrainerClients(user.id),
+      getActiveInvites(user.id),
+    ]);
+    return { clients, invites };
   }, [user]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const { data, loading, error, retry } = useAsyncData({
+    fetcher,
+    defaultValue: { clients: [], invites: [] } as ClientsData,
+    enabled: !!user,
+  });
+
+  const { clients, invites } = data;
 
   const handleGenerateCode = async () => {
     if (!user) return;
     setGenerating(true);
-    const { code, error } = await createInviteCode(user.id);
+    const { code, error: genError } = await createInviteCode(user.id);
     setGenerating(false);
     if (code) {
       setGeneratedCode(code);
-      loadData();
-    } else if (error) {
-      console.error('Failed to generate code:', error);
+      retry();
+    } else if (genError) {
+      Alert.alert(t('common.error'), genError);
     }
   };
 
@@ -100,22 +103,21 @@ export default function TrainerClientsScreen() {
 
   const handleRemoveClient = (connection: TrainerClient) => {
     const doRemove = async () => {
-      await removeConnection(connection.id);
-      loadData();
+      const result = await removeConnection(connection.id);
+      if (result.error) {
+        Alert.alert(t('common.error'), result.error);
+        return;
+      }
+      retry();
     };
 
-    if (Platform.OS === 'web') {
-      doRemove();
-    } else {
-      Alert.alert(
-        t('trainer.removeClient'),
-        t('trainer.removeConfirm'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('trainer.removeClient'), style: 'destructive', onPress: doRemove },
-        ]
-      );
-    }
+    confirmAction(
+      t('trainer.removeClient'),
+      t('trainer.removeConfirm'),
+      t('trainer.removeClient'),
+      t('common.cancel'),
+      doRemove,
+    );
   };
 
   const formatDate = (dateStr: string) => {
@@ -136,6 +138,8 @@ export default function TrainerClientsScreen() {
           <Text style={styles.title}>{t('trainer.myClients')}</Text>
           <View style={{ width: 44 }} />
         </View>
+
+        {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
 
         {/* Generate invite code */}
         <Text style={styles.sectionTitle}>{t('trainer.inviteCode')}</Text>
@@ -185,7 +189,7 @@ export default function TrainerClientsScreen() {
 
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.lg }} />
-        ) : clients.length > 0 ? (
+        ) : !error && clients.length > 0 ? (
           clients.map((client) => (
             <View key={client.id} style={styles.clientCard}>
               <View style={styles.clientAvatar}>
@@ -205,12 +209,12 @@ export default function TrainerClientsScreen() {
               </Pressable>
             </View>
           ))
-        ) : (
+        ) : !error ? (
           <View style={styles.emptyCard}>
             <Ionicons name="people-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyText}>{t('trainer.noClients')}</Text>
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

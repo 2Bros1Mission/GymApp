@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -10,12 +10,19 @@ import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { SkeletonWeekCalendar, SkeletonStatCard, SkeletonHistoryItem } from '../../src/components/SkeletonLoader';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { useAsyncData } from '../../src/hooks/useAsyncData';
+import { ErrorCard } from '../../src/components/ErrorCard';
 
 interface WorkoutLogEntry {
   id: string;
   workout_name: string;
   date: string;
   duration_seconds: number | null;
+}
+
+interface ProgressData {
+  stats: { totalWorkouts: number; streak: number; thisWeek: number; weekDays: boolean[] };
+  history: WorkoutLogEntry[];
 }
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
@@ -123,41 +130,30 @@ function formatDuration(seconds: number | null, minLabel: string): string {
 }
 
 export default function ProgressScreen() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [stats, setStats] = useState({
-    totalWorkouts: 0,
-    streak: 0,
-    thisWeek: 0,
-    weekDays: [false, false, false, false, false, false, false],
-  });
-  const [history, setHistory] = useState<WorkoutLogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const loadData = useCallback(async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const [s, h] = await Promise.all([
-        getWorkoutStats(user.id),
-        getWorkoutHistory(user.id, 10),
-      ]);
-      setStats(s);
-      setHistory(h);
-    } catch (err) {
-      console.error('Failed to load progress data:', err);
-    } finally {
-      setIsLoading(false);
-    }
+  const fetcher = useCallback(async (): Promise<ProgressData> => {
+    if (!user) return { stats: { totalWorkouts: 0, streak: 0, thisWeek: 0, weekDays: [false, false, false, false, false, false, false] }, history: [] };
+    const [stats, history] = await Promise.all([
+      getWorkoutStats(user.id),
+      getWorkoutHistory(user.id, 10),
+    ]);
+    return { stats, history };
   }, [user]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { data, loading, error, retry } = useAsyncData({
+    fetcher,
+    defaultValue: {
+      stats: { totalWorkouts: 0, streak: 0, thisWeek: 0, weekDays: [false, false, false, false, false, false, false] },
+      history: [],
+    } as ProgressData,
+    enabled: !!user,
+  });
 
+  const { stats, history } = data;
   const completedThisWeek = stats.weekDays.filter(Boolean).length;
   const breakpoint = useBreakpoint();
   const isLarge = breakpoint === 'lg';
@@ -174,88 +170,94 @@ export default function ProgressScreen() {
             <Text style={styles.title}>{t('progress.title')}</Text>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('progress.thisWeekSection')}</Text>
-            {isLoading ? (
-              <SkeletonWeekCalendar />
-            ) : (
-              <View style={styles.weekCard}>
-                <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} colors={colors} />
-                <Text style={styles.weekSummary}>
-                  {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
-                </Text>
+          {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
+
+          {!error && (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{t('progress.thisWeekSection')}</Text>
+                {loading ? (
+                  <SkeletonWeekCalendar />
+                ) : (
+                  <View style={styles.weekCard}>
+                    <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} colors={colors} />
+                    <Text style={styles.weekSummary}>
+                      {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
+                    </Text>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
 
-          {isLoading ? (
-            <View style={styles.statsGrid}>
-              <SkeletonStatCard />
-              <SkeletonStatCard />
-              <SkeletonStatCard />
-              <SkeletonStatCard />
-            </View>
-          ) : (
-            <View style={styles.statsGrid}>
-              <ProgressStat
-                label={t('progress.weight')}
-                value={user ? `${(user as any).weight ?? '--'} ${kgLabel}` : `-- ${kgLabel}`}
-                icon="scale"
-                colors={colors}
-              />
-              <ProgressStat
-                label={t('progress.workouts')}
-                value={`${stats.totalWorkouts}`}
-                change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
-                icon="barbell"
-                colors={colors}
-              />
-              <ProgressStat
-                label={t('home.streak')}
-                value={`${stats.streak} ${t('home.days')}`}
-                icon="flame"
-                colors={colors}
-              />
-              <ProgressStat
-                label={t('home.thisWeek')}
-                value={`${stats.thisWeek}`}
-                icon="calendar"
-                colors={colors}
-              />
-            </View>
-          )}
-
-          <View style={isLarge ? styles.desktopHistoryRow : undefined}>
-            <View style={[styles.section, isLarge && styles.desktopHistorySection]}>
-              <Text style={styles.sectionTitle}>{t('progress.history')}</Text>
-              {isLoading ? (
-                <View style={styles.historyCard}>
-                  <SkeletonHistoryItem />
-                  <SkeletonHistoryItem />
-                  <SkeletonHistoryItem />
-                </View>
-              ) : history.length > 0 ? (
-                <View style={styles.historyCard}>
-                  {history.map((log) => (
-                    <WorkoutHistoryItem
-                      key={log.id}
-                      name={log.workout_name}
-                      date={formatDate(log.date, months)}
-                      duration={formatDuration(log.duration_seconds, minLabel)}
-                      colors={colors}
-                    />
-                  ))}
+              {loading ? (
+                <View style={styles.statsGrid}>
+                  <SkeletonStatCard />
+                  <SkeletonStatCard />
+                  <SkeletonStatCard />
+                  <SkeletonStatCard />
                 </View>
               ) : (
-                <View style={styles.emptyCard}>
-                  <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
-                  <Text style={styles.emptyText}>
-                    {t('progress.noWorkouts')}
-                  </Text>
+                <View style={styles.statsGrid}>
+                  <ProgressStat
+                    label={t('progress.weight')}
+                    value={`${profile?.weight ?? '--'} ${kgLabel}`}
+                    icon="scale"
+                    colors={colors}
+                  />
+                  <ProgressStat
+                    label={t('progress.workouts')}
+                    value={`${stats.totalWorkouts}`}
+                    change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
+                    icon="barbell"
+                    colors={colors}
+                  />
+                  <ProgressStat
+                    label={t('home.streak')}
+                    value={`${stats.streak} ${t('home.days')}`}
+                    icon="flame"
+                    colors={colors}
+                  />
+                  <ProgressStat
+                    label={t('home.thisWeek')}
+                    value={`${stats.thisWeek}`}
+                    icon="calendar"
+                    colors={colors}
+                  />
                 </View>
               )}
-            </View>
-          </View>
+
+              <View style={isLarge ? styles.desktopHistoryRow : undefined}>
+                <View style={[styles.section, isLarge && styles.desktopHistorySection]}>
+                  <Text style={styles.sectionTitle}>{t('progress.history')}</Text>
+                  {loading ? (
+                    <View style={styles.historyCard}>
+                      <SkeletonHistoryItem />
+                      <SkeletonHistoryItem />
+                      <SkeletonHistoryItem />
+                    </View>
+                  ) : history.length > 0 ? (
+                    <View style={styles.historyCard}>
+                      {history.map((log) => (
+                        <WorkoutHistoryItem
+                          key={log.id}
+                          name={log.workout_name}
+                          date={formatDate(log.date, months)}
+                          duration={formatDuration(log.duration_seconds, minLabel)}
+                          colors={colors}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.emptyCard}>
+                      <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
+                      <Text style={styles.emptyText}>
+                        {t('progress.noWorkouts')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </>
+          )}
 
           <View style={{ height: Spacing.xl }} />
         </ResponsiveContainer>

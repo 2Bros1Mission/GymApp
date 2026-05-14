@@ -1,14 +1,16 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useCallback, useMemo } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTranslation } from '../src/contexts/LanguageContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { useBreakpoint } from '../src/hooks/useBreakpoint';
+import { useFocusAsyncData } from '../src/hooks/useAsyncData';
+import { ErrorCard } from '../src/components/ErrorCard';
+import { confirmAction } from '../src/lib/confirm';
 import { getCustomWorkouts, deleteCustomWorkout } from '../src/lib/trainerService';
 import type { CustomWorkout } from '../src/types';
 
@@ -44,42 +46,34 @@ export default function MyWorkoutsScreen() {
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
 
-  const [workouts, setWorkouts] = useState<CustomWorkout[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadWorkouts = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const w = await getCustomWorkouts(user.id);
-      setWorkouts(w);
-    } catch (err) {
-      console.error('Failed to load workouts:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetcher = useCallback(async (): Promise<CustomWorkout[]> => {
+    if (!user) return [];
+    return getCustomWorkouts(user.id);
   }, [user]);
 
-  useFocusEffect(useCallback(() => { loadWorkouts(); }, [loadWorkouts]));
+  const { data: workouts, loading, error, retry } = useFocusAsyncData({
+    fetcher,
+    defaultValue: [] as CustomWorkout[],
+    enabled: !!user,
+  });
 
   const handleDelete = (workout: CustomWorkout) => {
     const doDelete = async () => {
-      await deleteCustomWorkout(workout.id);
-      loadWorkouts();
+      const result = await deleteCustomWorkout(workout.id);
+      if (result.error) {
+        Alert.alert(t('common.error'), result.error);
+        return;
+      }
+      retry();
     };
 
-    if (Platform.OS === 'web') {
-      doDelete();
-    } else {
-      Alert.alert(
-        t('builder.removeExercise'),
-        t('builder.deleteConfirm'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('common.delete'), style: 'destructive', onPress: doDelete },
-        ]
-      );
-    }
+    confirmAction(
+      t('builder.removeExercise'),
+      t('builder.deleteConfirm'),
+      t('common.delete'),
+      t('common.cancel'),
+      doDelete,
+    );
   };
 
   const getDifficultyColor = (d: string) =>
@@ -101,9 +95,11 @@ export default function MyWorkoutsScreen() {
           </Pressable>
         </View>
 
+        {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
+
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xxl }} />
-        ) : workouts.length > 0 ? (
+        ) : !error && workouts.length > 0 ? (
           workouts.map((w) => (
             <Pressable
               key={w.id}
@@ -134,7 +130,7 @@ export default function MyWorkoutsScreen() {
               </View>
             </Pressable>
           ))
-        ) : (
+        ) : !error ? (
           <View style={styles.emptyCard}>
             <Ionicons name="barbell-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyText}>{t('builder.noWorkouts')}</Text>
@@ -143,7 +139,7 @@ export default function MyWorkoutsScreen() {
               <Text style={styles.createBtnText}>{t('builder.createFirst')}</Text>
             </Pressable>
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

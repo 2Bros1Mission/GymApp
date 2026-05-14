@@ -1,13 +1,16 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useTranslation } from '../src/contexts/LanguageContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { useBreakpoint } from '../src/hooks/useBreakpoint';
+import { useAsyncData } from '../src/hooks/useAsyncData';
+import { ErrorCard } from '../src/components/ErrorCard';
+import { confirmAction } from '../src/lib/confirm';
 import { redeemInviteCode, getClientTrainer, removeConnection } from '../src/lib/trainerService';
 import type { TrainerClient } from '../src/types';
 
@@ -49,32 +52,26 @@ export default function MyTrainerScreen() {
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
 
-  const [trainer, setTrainer] = useState<TrainerClient | null>(null);
   const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [success, setSuccess] = useState('');
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
 
-  const loadTrainer = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const t = await getClientTrainer(user.id);
-      setTrainer(t);
-    } catch (err) {
-      console.error('Failed to load trainer:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetcher = useCallback(async (): Promise<TrainerClient | null> => {
+    if (!user) return null;
+    return getClientTrainer(user.id);
   }, [user]);
 
-  useEffect(() => { loadTrainer(); }, [loadTrainer]);
+  const { data: trainer, loading, error, retry } = useAsyncData({
+    fetcher,
+    defaultValue: null as TrainerClient | null,
+    enabled: !!user,
+  });
 
   const handleConnect = async () => {
     if (!code.trim() || code.trim().length < 6) return;
     setConnecting(true);
-    setError('');
+    setFormError('');
     setSuccess('');
 
     const result = await redeemInviteCode(code.trim());
@@ -83,13 +80,13 @@ export default function MyTrainerScreen() {
     if (result.success) {
       setSuccess(t('client.connected'));
       setCode('');
-      loadTrainer();
+      retry();
     } else {
       const errorKey = result.error === 'invalid_code' ? 'client.errorInvalidCode'
         : result.error === 'already_connected' ? 'client.errorAlreadyConnected'
         : result.error === 'only_clients' ? 'client.errorOnlyClients'
         : 'client.errorUnknown';
-      setError(t(errorKey));
+      setFormError(t(errorKey));
     }
   };
 
@@ -97,23 +94,22 @@ export default function MyTrainerScreen() {
     if (!trainer) return;
 
     const doDisconnect = async () => {
-      await removeConnection(trainer.id);
-      setTrainer(null);
+      const result = await removeConnection(trainer.id);
+      if (result.error) {
+        Alert.alert(t('common.error'), result.error);
+        return;
+      }
       setSuccess(t('client.disconnected'));
+      retry();
     };
 
-    if (Platform.OS === 'web') {
-      doDisconnect();
-    } else {
-      Alert.alert(
-        t('client.disconnect'),
-        t('client.disconnectConfirm'),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('client.disconnect'), style: 'destructive', onPress: doDisconnect },
-        ]
-      );
-    }
+    confirmAction(
+      t('client.disconnect'),
+      t('client.disconnectConfirm'),
+      t('client.disconnect'),
+      t('common.cancel'),
+      doDisconnect,
+    );
   };
 
   const formatDate = (dateStr: string) => {
@@ -143,16 +139,18 @@ export default function MyTrainerScreen() {
           </View>
         )}
 
-        {error !== '' && (
+        {formError !== '' && (
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle" size={18} color={colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{formError}</Text>
           </View>
         )}
 
+        {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
+
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xxl }} />
-        ) : trainer ? (
+        ) : !error && trainer ? (
           <>
             <Text style={styles.sectionTitle}>{t('client.myTrainer')}</Text>
             <View style={styles.trainerCard}>
@@ -172,7 +170,7 @@ export default function MyTrainerScreen() {
               </Pressable>
             </View>
           </>
-        ) : (
+        ) : !error ? (
           <>
             <View style={styles.emptyCard}>
               <Ionicons name="person-add-outline" size={40} color={colors.textMuted} />
@@ -184,7 +182,7 @@ export default function MyTrainerScreen() {
               <TextInput
                 style={styles.codeInput}
                 value={code}
-                onChangeText={(v) => { setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)); setError(''); setSuccess(''); }}
+                onChangeText={(v) => { setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)); setFormError(''); setSuccess(''); }}
                 placeholder={t('client.codePlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="characters"
@@ -203,7 +201,7 @@ export default function MyTrainerScreen() {
               </Pressable>
             </View>
           </>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

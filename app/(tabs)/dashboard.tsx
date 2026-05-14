@@ -2,15 +2,22 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useCallback, useMemo } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
+import { ErrorCard } from '../../src/components/ErrorCard';
+import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
 import { getTrainerClients, getActiveInvites, getCustomWorkouts } from '../../src/lib/trainerService';
 import type { TrainerClient, TrainerInvite, CustomWorkout } from '../../src/types';
+
+interface DashboardData {
+  clients: TrainerClient[];
+  invites: TrainerInvite[];
+  workouts: CustomWorkout[];
+}
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -56,32 +63,23 @@ export default function TrainerDashboardScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [clients, setClients] = useState<TrainerClient[]>([]);
-  const [invites, setInvites] = useState<TrainerInvite[]>([]);
-  const [workouts, setWorkouts] = useState<CustomWorkout[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const [c, i, w] = await Promise.all([
-        getTrainerClients(user.id),
-        getActiveInvites(user.id),
-        getCustomWorkouts(user.id),
-      ]);
-      setClients(c);
-      setInvites(i);
-      setWorkouts(w);
-    } catch (err) {
-      console.error('Failed to load dashboard:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetcher = useCallback(async (): Promise<DashboardData> => {
+    if (!user) return { clients: [], invites: [], workouts: [] };
+    const [clients, invites, workouts] = await Promise.all([
+      getTrainerClients(user.id),
+      getActiveInvites(user.id),
+      getCustomWorkouts(user.id),
+    ]);
+    return { clients, invites, workouts };
   }, [user]);
 
-  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+  const { data, loading, error, retry } = useFocusAsyncData({
+    fetcher,
+    defaultValue: { clients: [], invites: [], workouts: [] } as DashboardData,
+    enabled: !!user,
+  });
 
+  const { clients, invites, workouts } = data;
   const displayName = profile?.name || t('home.defaultName');
 
   const getDifficultyColor = (d: string) =>
@@ -99,10 +97,12 @@ export default function TrainerDashboardScreen() {
             </View>
           </View>
 
+          {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
+
           {/* Stats */}
           {loading ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: Spacing.lg }} />
-          ) : (
+          ) : !error && (
             <View style={styles.statsRow}>
               <View style={[styles.statCard, { borderLeftColor: colors.primary }]}>
                 <Ionicons name="people" size={22} color={colors.primary} />
@@ -143,82 +143,86 @@ export default function TrainerDashboardScreen() {
           </View>
 
           {/* Recent clients */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('dashboard.recentClients')}</Text>
-            {clients.length > 0 && (
-              <Pressable onPress={() => router.push('/trainer-clients')}>
-                <Text style={styles.seeAllText}>{t('dashboard.seeAll')}</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {clients.length > 0 ? (
-            clients.slice(0, 3).map((c) => (
-              <View key={c.id} style={styles.clientItem}>
-                <View style={styles.clientAvatar}>
-                  <Text style={styles.clientAvatarText}>
-                    {(c.clientName ?? '?').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.clientInfo}>
-                  <Text style={styles.clientName}>{c.clientName ?? '--'}</Text>
-                  <Text style={styles.clientDate}>
-                    {t('trainer.connectedSince')} {new Date(c.connectedAt).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Ionicons name="people-outline" size={32} color={colors.textMuted} />
-              <Text style={styles.emptyText}>{t('trainer.noClients')}</Text>
-            </View>
-          )}
-
-          {/* Programs */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('dashboard.myPrograms')}</Text>
-            {workouts.length > 0 && (
-              <Pressable onPress={() => router.push('/my-workouts')}>
-                <Text style={styles.seeAllText}>{t('dashboard.seeAll')}</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {workouts.length > 0 ? (
-            workouts.slice(0, 3).map((w) => (
-              <Pressable key={w.id} style={styles.workoutItem} onPress={() => router.push(`/workout-builder?id=${w.id}`)}>
-                <View style={[styles.workoutDot, { backgroundColor: getDifficultyColor(w.difficulty) }]} />
-                <View style={styles.workoutInfo}>
-                  <Text style={styles.workoutName}>{language === 'bg' && w.nameBg ? w.nameBg : w.name}</Text>
-                  <Text style={styles.workoutMeta}>
-                    {w.exercises.length} {t('workouts.exercises')} · {w.durationMinutes} {t('workouts.minutes')}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
-              <Text style={styles.emptyText}>{t('builder.noWorkouts')}</Text>
-            </View>
-          )}
-
-          {/* Pending invites */}
-          {invites.length > 0 && (
+          {!error && (
             <>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{t('dashboard.pendingInvites')}</Text>
+                <Text style={styles.sectionTitle}>{t('dashboard.recentClients')}</Text>
+                {clients.length > 0 && (
+                  <Pressable onPress={() => router.push('/trainer-clients')}>
+                    <Text style={styles.seeAllText}>{t('dashboard.seeAll')}</Text>
+                  </Pressable>
+                )}
               </View>
-              {invites.slice(0, 3).map((inv) => (
-                <View key={inv.id} style={styles.inviteItem}>
-                  <Text style={styles.inviteCode}>{inv.code}</Text>
-                  <Text style={styles.inviteExpiry}>
-                    {new Date(inv.expiresAt).toLocaleDateString()}
-                  </Text>
+
+              {clients.length > 0 ? (
+                clients.slice(0, 3).map((c) => (
+                  <View key={c.id} style={styles.clientItem}>
+                    <View style={styles.clientAvatar}>
+                      <Text style={styles.clientAvatarText}>
+                        {(c.clientName ?? '?').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.clientInfo}>
+                      <Text style={styles.clientName}>{c.clientName ?? '--'}</Text>
+                      <Text style={styles.clientDate}>
+                        {t('trainer.connectedSince')} {new Date(c.connectedAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="people-outline" size={32} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>{t('trainer.noClients')}</Text>
                 </View>
-              ))}
+              )}
+
+              {/* Programs */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{t('dashboard.myPrograms')}</Text>
+                {workouts.length > 0 && (
+                  <Pressable onPress={() => router.push('/my-workouts')}>
+                    <Text style={styles.seeAllText}>{t('dashboard.seeAll')}</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {workouts.length > 0 ? (
+                workouts.slice(0, 3).map((w) => (
+                  <Pressable key={w.id} style={styles.workoutItem} onPress={() => router.push(`/workout-builder?id=${w.id}`)}>
+                    <View style={[styles.workoutDot, { backgroundColor: getDifficultyColor(w.difficulty) }]} />
+                    <View style={styles.workoutInfo}>
+                      <Text style={styles.workoutName}>{language === 'bg' && w.nameBg ? w.nameBg : w.name}</Text>
+                      <Text style={styles.workoutMeta}>
+                        {w.exercises.length} {t('workouts.exercises')} · {w.durationMinutes} {t('workouts.minutes')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  </Pressable>
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>{t('builder.noWorkouts')}</Text>
+                </View>
+              )}
+
+              {/* Pending invites */}
+              {invites.length > 0 && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>{t('dashboard.pendingInvites')}</Text>
+                  </View>
+                  {invites.slice(0, 3).map((inv) => (
+                    <View key={inv.id} style={styles.inviteItem}>
+                      <Text style={styles.inviteCode}>{inv.code}</Text>
+                      <Text style={styles.inviteExpiry}>
+                        {new Date(inv.expiresAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
             </>
           )}
 
