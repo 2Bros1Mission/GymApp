@@ -31,7 +31,7 @@ export async function saveWorkoutLog(params: SaveWorkoutParams): Promise<{ error
     p_workout_id: workoutId,
     p_workout_name: workoutName,
     p_duration_seconds: durationSeconds,
-    p_notes: notes ?? null,
+    p_notes: notes ?? undefined,
     p_exercises: exercises.map((ex) => ({
       exerciseId: ex.exerciseId,
       exerciseName: ex.exerciseName,

@@ -57,7 +57,7 @@ describe('saveWorkoutLog', () => {
       p_workout_id: 'workout-1',
       p_workout_name: 'Push Day',
       p_duration_seconds: 3600,
-      p_notes: null,
+      p_notes: undefined,
       p_exercises: [
         {
           exerciseId: 'ex-1',
@@ -128,12 +128,10 @@ describe('getWorkoutStats', () => {
 });
 
 describe('getWorkoutHistory', () => {
-  it('should return empty array on error', async () => {
+  it('should throw on error', async () => {
     setupQueryChain({ data: null, error: { message: 'Error' } });
 
-    const history = await getWorkoutHistory('user-123');
-
-    expect(history).toEqual([]);
+    await expect(getWorkoutHistory('user-123')).rejects.toThrow('Error');
   });
 
   it('should return workout logs', async () => {

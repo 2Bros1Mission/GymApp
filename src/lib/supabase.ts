@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import type { Database } from '../types/database';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
@@ -30,8 +31,8 @@ const ExpoSecureStoreAdapter = {
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase: SupabaseClient = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase: SupabaseClient<Database> = isSupabaseConfigured
+  ? createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         storage: ExpoSecureStoreAdapter,
         autoRefreshToken: true,
@@ -39,7 +40,7 @@ export const supabase: SupabaseClient = isSupabaseConfigured
         detectSessionInUrl: false,
       },
     })
-  : (new Proxy({} as SupabaseClient, {
+  : (new Proxy({} as SupabaseClient<Database>, {
       get: (_target, prop) => {
         if (prop === 'auth') {
           return {
@@ -59,4 +60,4 @@ export const supabase: SupabaseClient = isSupabaseConfigured
         }
         return () => {};
       },
-    }) as unknown as SupabaseClient);
+    }) as unknown as SupabaseClient<Database>);

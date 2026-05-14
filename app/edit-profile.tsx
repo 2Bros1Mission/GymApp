@@ -73,7 +73,7 @@ export default function EditProfileScreen() {
     setError('');
     setSuccess(false);
 
-    const updates: Record<string, unknown> = {
+    const updates = {
       name: name.trim(),
       weight: weight ? parseFloat(weight) : null,
       height: height ? parseFloat(height) : null,
