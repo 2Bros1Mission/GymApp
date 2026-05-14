@@ -8,7 +8,7 @@ type Language = 'bg' | 'en';
 interface LanguageState {
   language: Language;
   setLanguage: (lang: Language) => Promise<void>;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string>) => string;
 }
 
 const LanguageContext = createContext<LanguageState | undefined>(undefined);
@@ -39,8 +39,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [user, refreshProfile]);
 
   // Reactive translation function — bound to current language
-  const t = useCallback((key: string): string => {
-    return translations[language]?.[key] ?? key;
+  const t = useCallback((key: string, params?: Record<string, string>): string => {
+    let value = translations[language]?.[key] ?? key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        value = value.replaceAll(`{${k}}`, v);
+      }
+    }
+    return value;
   }, [language]);
 
   return (

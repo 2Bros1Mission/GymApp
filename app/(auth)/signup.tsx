@@ -121,7 +121,7 @@ export default function SignupScreen() {
               <Ionicons name="mail-outline" size={64} color={colors.success} />
               <Text style={styles.successTitle}>{t('auth.checkEmail')}</Text>
               <Text style={styles.successText}>
-                {t('auth.confirmationSent').replace('{email}', email)}
+                {t('auth.confirmationSent', { email })}
               </Text>
               <Pressable
                 style={styles.submitButton}

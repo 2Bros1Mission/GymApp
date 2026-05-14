@@ -182,7 +182,7 @@ export default function ProgressScreen() {
                   <View style={styles.weekCard}>
                     <WeekCalendar weekDays={stats.weekDays} dayLabels={dayLabels} colors={colors} />
                     <Text style={styles.weekSummary}>
-                      {t('progress.weeklyCompleted').replace('{completed}', String(completedThisWeek)).replace('{goal}', '5')}
+                      {t('progress.weeklyCompleted', { completed: String(completedThisWeek), goal: '5' })}
                     </Text>
                   </View>
                 )}
@@ -206,7 +206,7 @@ export default function ProgressScreen() {
                   <ProgressStat
                     label={t('progress.workouts')}
                     value={`${stats.totalWorkouts}`}
-                    change={stats.thisWeek > 0 ? t('progress.thisWeekChange').replace('{count}', String(stats.thisWeek)) : undefined}
+                    change={stats.thisWeek > 0 ? t('progress.thisWeekChange', { count: String(stats.thisWeek) }) : undefined}
                     icon="barbell"
                     colors={colors}
                   />
