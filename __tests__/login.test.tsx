@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
+import LoginScreen from '../app/(auth)/login';
+
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: 'Ionicons',
 }));
@@ -79,8 +81,6 @@ jest.mock('../src/lib/supabase', () => ({
     },
   },
 }));
-
-import LoginScreen from '../app/(auth)/login';
 
 beforeEach(() => {
   jest.clearAllMocks();

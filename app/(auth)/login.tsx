@@ -15,7 +15,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
   const { t } = useTranslation();
-  const { guardAction, isConnected } = useOfflineGuard();
+  const { guardAction } = useOfflineGuard();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

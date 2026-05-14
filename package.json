@@ -10,6 +10,7 @@
     "build:web": "expo export --platform web",
     "preview:web": "expo export --platform web && npx serve dist -s",
     "gen:types": "supabase gen types typescript --project-id ivmvyohjzlunkwkutmlh --schema public > src/types/database.ts",
+    "lint": "eslint .",
     "test": "jest",
     "test:watch": "jest --watch"
   },
@@ -44,6 +45,8 @@
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "^55.0.1",
     "jest": "^29.7.0",
     "jest-expo": "^55.0.17",
     "serve": "^14.2.6",
