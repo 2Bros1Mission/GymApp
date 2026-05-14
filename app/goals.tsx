@@ -360,7 +360,7 @@ export default function GoalsScreen() {
         <Text style={styles.suggestionDetail}>{t('suggestions.adjustment', { title: suggestion.targetGoalTitle })}</Text>
       )}
       {suggestion.message && (
-        <Text style={styles.suggestionMessage}>"{suggestion.message}"</Text>
+        <Text style={styles.suggestionMessage}>&ldquo;{suggestion.message}&rdquo;</Text>
       )}
       <View style={styles.suggestionActions}>
         <Pressable style={[styles.actionBtn, styles.acceptBtn]} onPress={() => handleAcceptSuggestion(suggestion)}>

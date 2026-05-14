@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../src/constants/theme';
 import { useTranslation } from '../src/contexts/LanguageContext';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -79,8 +79,8 @@ export default function SuggestGoalScreen() {
   const targetGoal = isAdjustment ? clientGoals.find((g) => g.id === goalId) : null;
 
   // Pre-fill from target goal if adjusting
-  useMemo(() => {
-    if (targetGoal && !title) {
+  useEffect(() => {
+    if (targetGoal) {
       setGoalType(targetGoal.goalType);
       setTitle(targetGoal.title);
       setTargetValue(targetGoal.targetValue?.toString() ?? '');
