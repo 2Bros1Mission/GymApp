@@ -43,13 +43,15 @@ export async function createInviteCode(trainerId: string): Promise<{ code?: stri
  * Get the trainer's active (unused, non-expired) invite codes.
  */
 export async function getActiveInvites(trainerId: string): Promise<TrainerInvite[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('trainer_invites')
     .select('*')
     .eq('trainer_id', trainerId)
     .eq('used', false)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -78,7 +80,7 @@ export async function redeemInviteCode(code: string): Promise<{ success: boolean
  * Get the trainer's connected clients (active only).
  */
 export async function getTrainerClients(trainerId: string): Promise<TrainerClient[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('trainer_clients')
     .select(`
       id,
@@ -91,6 +93,8 @@ export async function getTrainerClients(trainerId: string): Promise<TrainerClien
     .eq('trainer_id', trainerId)
     .eq('status', 'active')
     .order('connected_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -107,7 +111,7 @@ export async function getTrainerClients(trainerId: string): Promise<TrainerClien
  * Get the client's trainer (if connected).
  */
 export async function getClientTrainer(clientId: string): Promise<TrainerClient | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('trainer_clients')
     .select(`
       id,
@@ -122,6 +126,7 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
     .limit(1)
     .single();
 
+  if (error && error.code !== 'PGRST116') throw new Error(error.message);
   if (!data) return null;
 
   return {
@@ -172,11 +177,13 @@ function mapRowToCustomWorkout(row: any): CustomWorkout {
  * Get all custom workouts created by a trainer.
  */
 export async function getCustomWorkouts(creatorId: string): Promise<CustomWorkout[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('custom_workouts')
     .select('*')
     .eq('creator_id', creatorId)
     .order('updated_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
 
   return (data ?? []).map(mapRowToCustomWorkout);
 }
@@ -185,12 +192,13 @@ export async function getCustomWorkouts(creatorId: string): Promise<CustomWorkou
  * Get a single custom workout by ID.
  */
 export async function getCustomWorkout(workoutId: string): Promise<CustomWorkout | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('custom_workouts')
     .select('*')
     .eq('id', workoutId)
     .single();
 
+  if (error && error.code !== 'PGRST116') throw new Error(error.message);
   if (!data) return null;
   return mapRowToCustomWorkout(data);
 }

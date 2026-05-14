@@ -63,8 +63,7 @@ export async function getWorkoutHistory(userId: string, limit = 20) {
     .limit(limit);
 
   if (error) {
-    console.error('Error fetching workout history:', error);
-    return [];
+    throw new Error(error.message);
   }
   return data ?? [];
 }
@@ -128,7 +127,7 @@ export async function getWorkoutStats(userId: string) {
 }
 
 export async function getExerciseHistory(userId: string, exerciseId: string, limit = 10) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('exercise_logs')
     .select(`
       *,
@@ -140,6 +139,7 @@ export async function getExerciseHistory(userId: string, exerciseId: string, lim
     .order('created_at', { ascending: false })
     .limit(limit);
 
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
@@ -161,12 +161,13 @@ export async function saveBodyMetric(userId: string, weight: number, notes?: str
 }
 
 export async function getBodyMetrics(userId: string, limit = 30) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('body_metrics')
     .select('*')
     .eq('user_id', userId)
     .order('date', { ascending: false })
     .limit(limit);
 
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
