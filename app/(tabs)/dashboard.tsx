@@ -10,13 +10,14 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { ErrorCard } from '../../src/components/ErrorCard';
 import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
-import { getTrainerClients, getCustomWorkouts, getTrainerCode } from '../../src/lib/trainerService';
-import type { TrainerClient, CustomWorkout } from '../../src/types';
+import { getTrainerClients, getCustomWorkouts, getTrainerCode, getRecentClientActivity } from '../../src/lib/trainerService';
+import type { TrainerClient, CustomWorkout, RecentActivity } from '../../src/types';
 
 interface DashboardData {
   clients: TrainerClient[];
   trainerCode: string | null;
   workouts: CustomWorkout[];
+  recentActivity: RecentActivity[];
 }
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
@@ -54,6 +55,13 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   workoutInfo: { flex: 1 },
   workoutName: { fontSize: FontSize.md, fontWeight: '600', color: colors.text },
   workoutMeta: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  activityItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginHorizontal: Spacing.lg, marginBottom: Spacing.sm },
+  activityAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
+  activityAvatarText: { fontSize: FontSize.xs, fontWeight: '700', color: colors.white },
+  activityInfo: { flex: 1 },
+  activityName: { fontSize: FontSize.sm, fontWeight: '600', color: colors.text },
+  activityMeta: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  activityDuration: { fontSize: FontSize.xs, fontWeight: '600', color: colors.textSecondary },
 });
 
 export default function TrainerDashboardScreen() {
@@ -64,22 +72,23 @@ export default function TrainerDashboardScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const fetcher = useCallback(async (): Promise<DashboardData> => {
-    if (!user) return { clients: [], trainerCode: null, workouts: [] };
-    const [clients, trainerCode, workouts] = await Promise.all([
+    if (!user) return { clients: [], trainerCode: null, workouts: [], recentActivity: [] };
+    const [clients, trainerCode, workouts, recentActivity] = await Promise.all([
       getTrainerClients(user.id),
       getTrainerCode(user.id),
       getCustomWorkouts(user.id),
+      getRecentClientActivity(user.id),
     ]);
-    return { clients, trainerCode, workouts };
+    return { clients, trainerCode, workouts, recentActivity };
   }, [user]);
 
   const { data, loading, error, retry } = useFocusAsyncData({
     fetcher,
-    defaultValue: { clients: [], trainerCode: null, workouts: [] } as DashboardData,
+    defaultValue: { clients: [], trainerCode: null, workouts: [], recentActivity: [] } as DashboardData,
     enabled: !!user,
   });
 
-  const { clients, trainerCode, workouts } = data;
+  const { clients, trainerCode, workouts, recentActivity } = data;
   const displayName = profile?.name || t('home.defaultName');
 
   const getDifficultyColor = (d: string) =>
@@ -141,6 +150,47 @@ export default function TrainerDashboardScreen() {
               <Text style={styles.quickActionText}>{t('dashboard.createWorkout')}</Text>
             </Pressable>
           </View>
+
+          {/* Recent activity */}
+          {!error && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{t('dashboard.recentActivity')}</Text>
+              </View>
+
+              {recentActivity.length > 0 ? (
+                recentActivity.map((a) => (
+                  <Pressable
+                    key={a.id}
+                    style={styles.activityItem}
+                    onPress={() => router.push(`/client-progress?clientId=${a.clientId}`)}
+                  >
+                    <View style={styles.activityAvatar}>
+                      <Text style={styles.activityAvatarText}>
+                        {a.clientName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.activityInfo}>
+                      <Text style={styles.activityName}>{a.clientName}</Text>
+                      <Text style={styles.activityMeta}>
+                        {a.workoutName} · {new Date(a.date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                    {a.durationSeconds != null && (
+                      <Text style={styles.activityDuration}>
+                        {Math.floor(a.durationSeconds / 60)} {t('workouts.minutes')}
+                      </Text>
+                    )}
+                  </Pressable>
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="pulse-outline" size={32} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>{t('dashboard.noActivity')}</Text>
+                </View>
+              )}
+            </>
+          )}
 
           {/* Recent clients */}
           {!error && (
