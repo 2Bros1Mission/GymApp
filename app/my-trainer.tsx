@@ -32,7 +32,6 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   trainerAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   trainerAvatarText: { fontSize: FontSize.xxl, fontWeight: '700', color: colors.white },
   trainerName: { fontSize: FontSize.xl, fontWeight: '700', color: colors.text },
-  trainerEmail: { fontSize: FontSize.sm, color: colors.textSecondary },
   trainerDate: { fontSize: FontSize.xs, color: colors.textMuted },
   disconnectBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: colors.error + '15', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginTop: Spacing.sm },
   disconnectBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.error },
@@ -63,7 +62,6 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
 interface PendingConfirmation {
   connectionId: string;
   trainerName: string;
-  trainerEmail: string;
 }
 
 export default function MyTrainerScreen() {
@@ -108,7 +106,6 @@ export default function MyTrainerScreen() {
         setPendingConfirmation({
           connectionId: result.connectionId!,
           trainerName: result.trainerName ?? '--',
-          trainerEmail: result.trainerEmail ?? '',
         });
         setCode('');
       } else {
@@ -210,7 +207,6 @@ export default function MyTrainerScreen() {
               </Text>
             </View>
             <Text style={styles.trainerName}>{pendingConfirmation.trainerName}</Text>
-            <Text style={styles.trainerEmail}>{pendingConfirmation.trainerEmail}</Text>
             <Text style={styles.confirmPromptText}>
               {t('client.confirmPrompt', { name: pendingConfirmation.trainerName })}
             </Text>
@@ -243,7 +239,6 @@ export default function MyTrainerScreen() {
               </Text>
             </View>
             <Text style={styles.trainerName}>{trainer.trainerName ?? '--'}</Text>
-            <Text style={styles.trainerEmail}>{trainer.trainerEmail ?? ''}</Text>
             <Text style={styles.trainerDate}>
               {t('trainer.connectedSince')} {formatDate(trainer.connectedAt)}
             </Text>
@@ -268,7 +263,6 @@ export default function MyTrainerScreen() {
               </Text>
             </View>
             <Text style={styles.trainerName}>{trainer.trainerName ?? '--'}</Text>
-            <Text style={styles.trainerEmail}>{trainer.trainerEmail ?? ''}</Text>
             <View style={styles.pendingBadge}>
               <Text style={styles.pendingBadgeText}>{t('client.pendingApproval')}</Text>
             </View>
@@ -286,7 +280,6 @@ export default function MyTrainerScreen() {
       setPendingConfirmation({
         connectionId: trainer.id,
         trainerName: trainer.trainerName ?? '--',
-        trainerEmail: trainer.trainerEmail ?? '',
       });
       return null;
     }
