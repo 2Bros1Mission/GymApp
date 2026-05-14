@@ -108,6 +108,14 @@ function RootLayoutNav() {
           name="my-trainer"
           options={{ animation: 'slide_from_right' }}
         />
+        <Stack.Screen
+          name="my-workouts"
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="workout-builder"
+          options={{ animation: 'slide_from_bottom' }}
+        />
       </Stack>
       <OfflineBanner />
     </>

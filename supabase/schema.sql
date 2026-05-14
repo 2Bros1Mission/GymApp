@@ -271,6 +271,36 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Custom workouts (trainer-created workout templates)
+create table public.custom_workouts (
+  id uuid default gen_random_uuid() primary key,
+  creator_id uuid references public.profiles on delete cascade not null,
+  name text not null,
+  name_bg text not null default '',
+  description text not null default '',
+  description_bg text not null default '',
+  difficulty text not null default 'intermediate' check (difficulty in ('beginner', 'intermediate', 'advanced')),
+  duration_minutes integer not null default 30,
+  muscle_groups text[] not null default '{}',
+  exercises jsonb not null default '[]'::jsonb,
+  is_public boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_custom_workouts_creator on public.custom_workouts (creator_id);
+create index idx_custom_workouts_public on public.custom_workouts (is_public) where is_public = true;
+
+alter table public.custom_workouts enable row level security;
+
+create policy "Creators can manage own custom workouts"
+  on public.custom_workouts for all
+  using (auth.uid() = creator_id);
+
+create policy "Public workouts are readable by all"
+  on public.custom_workouts for select
+  using (is_public = true);
+
 -- Atomic workout save RPC (single transaction for workout_log + exercise_logs + set_logs)
 create or replace function public.save_workout(
   p_user_id uuid,

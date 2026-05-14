@@ -240,6 +240,17 @@ export default function ProfileScreen() {
                 onPress={() => router.push(profile?.role === 'trainer' ? '/trainer-clients' : '/my-trainer')}
                 colors={colors}
               />
+              {profile?.role === 'trainer' && (
+                <>
+                  <View style={styles.menuDivider} />
+                  <ProfileMenuItem
+                    icon="create-outline"
+                    label={t('builder.myWorkouts')}
+                    onPress={() => router.push('/my-workouts')}
+                    colors={colors}
+                  />
+                </>
+              )}
             </View>
           </View>
 
