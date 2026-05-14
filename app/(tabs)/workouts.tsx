@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { sampleWorkouts } from '../../src/data/workouts';
@@ -10,6 +10,7 @@ import { DifficultyLevel, MuscleGroup, Workout } from '../../src/types';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { SkeletonWorkoutCard } from '../../src/components/SkeletonLoader';
 
 const muscleGroupIcons: Record<MuscleGroup, React.ComponentProps<typeof Ionicons>['name']> = {
   chest: 'body',
@@ -105,10 +106,16 @@ export default function WorkoutsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [loading, setLoading] = useState(true);
   const breakpoint = useBreakpoint();
   const numColumns = breakpoint === 'lg' ? 3 : breakpoint === 'md' ? 2 : 1;
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: t('workouts.all') },
@@ -148,7 +155,7 @@ export default function WorkoutsScreen() {
         </ScrollView>
 
         <FlatList
-          data={filteredWorkouts}
+          data={loading ? [] : filteredWorkouts}
           keyExtractor={(item) => item.id}
           key={`grid-${numColumns}`}
           numColumns={numColumns}
@@ -161,6 +168,13 @@ export default function WorkoutsScreen() {
               />
             </View>
           )}
+          ListEmptyComponent={loading ? (
+            <View>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonWorkoutCard key={i} />
+              ))}
+            </View>
+          ) : undefined}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
