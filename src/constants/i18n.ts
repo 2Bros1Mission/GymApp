@@ -146,6 +146,17 @@ export const translations: Translations = {
     'role.trainer': 'Треньор',
     'role.client': 'Клиент',
 
+    'tab.dashboard': 'Табло',
+
+    'dashboard.clients': 'Клиенти',
+    'dashboard.programs': 'Програми',
+    'dashboard.pendingInvites': 'Чакащи покани',
+    'dashboard.inviteClient': 'Покани клиент',
+    'dashboard.createWorkout': 'Създай тренировка',
+    'dashboard.recentClients': 'Последни клиенти',
+    'dashboard.seeAll': 'Виж всички',
+    'dashboard.myPrograms': 'Моите програми',
+
     'trainer.myClients': 'Моите клиенти',
     'trainer.inviteCode': 'Код за покана',
     'trainer.generateCode': 'Генерирай код',
@@ -406,6 +417,17 @@ export const translations: Translations = {
 
     'role.trainer': 'Trainer',
     'role.client': 'Client',
+
+    'tab.dashboard': 'Dashboard',
+
+    'dashboard.clients': 'Clients',
+    'dashboard.programs': 'Programs',
+    'dashboard.pendingInvites': 'Pending Invites',
+    'dashboard.inviteClient': 'Invite Client',
+    'dashboard.createWorkout': 'Create Workout',
+    'dashboard.recentClients': 'Recent Clients',
+    'dashboard.seeAll': 'See All',
+    'dashboard.myPrograms': 'My Programs',
 
     'trainer.myClients': 'My Clients',
     'trainer.inviteCode': 'Invite Code',

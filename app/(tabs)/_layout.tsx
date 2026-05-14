@@ -6,6 +6,7 @@ import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { Sidebar, SIDEBAR_WIDTH } from '../../src/components/Sidebar';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 type TabIcon = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -14,6 +15,9 @@ export default function TabLayout() {
   const breakpoint = useBreakpoint();
   const isDesktop = breakpoint === 'lg';
   const { colors } = useTheme();
+  const { profile } = useAuth();
+
+  const isTrainer = profile?.role === 'trainer';
 
   return (
     <View style={styles.root}>
@@ -40,6 +44,7 @@ export default function TabLayout() {
             },
           }}
         >
+          {/* Client tabs */}
           <Tabs.Screen
             name="index"
             options={{
@@ -47,6 +52,7 @@ export default function TabLayout() {
               tabBarIcon: ({ color, size }: { color: string; size: number }) => (
                 <Ionicons name="home" size={size} color={color} />
               ),
+              href: isTrainer ? null : '/(tabs)',
             }}
           />
           <Tabs.Screen
@@ -56,6 +62,7 @@ export default function TabLayout() {
               tabBarIcon: ({ color, size }: { color: string; size: number }) => (
                 <Ionicons name="barbell" size={size} color={color} />
               ),
+              href: isTrainer ? null : '/(tabs)/workouts',
             }}
           />
           <Tabs.Screen
@@ -65,8 +72,23 @@ export default function TabLayout() {
               tabBarIcon: ({ color, size }: { color: string; size: number }) => (
                 <Ionicons name="stats-chart" size={size} color={color} />
               ),
+              href: isTrainer ? null : '/(tabs)/progress',
             }}
           />
+
+          {/* Trainer tabs */}
+          <Tabs.Screen
+            name="dashboard"
+            options={{
+              title: t('tab.dashboard'),
+              tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+                <Ionicons name="grid" size={size} color={color} />
+              ),
+              href: isTrainer ? '/(tabs)/dashboard' : null,
+            }}
+          />
+
+          {/* Shared */}
           <Tabs.Screen
             name="profile"
             options={{

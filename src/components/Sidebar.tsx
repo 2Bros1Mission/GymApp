@@ -17,10 +17,15 @@ interface NavItem {
   iconActive: IoniconsName;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const CLIENT_NAV_ITEMS: NavItem[] = [
   { route: '/(tabs)', segment: 'index', labelKey: 'tab.home', icon: 'home-outline', iconActive: 'home' },
   { route: '/(tabs)/workouts', segment: 'workouts', labelKey: 'tab.workouts', icon: 'barbell-outline', iconActive: 'barbell' },
   { route: '/(tabs)/progress', segment: 'progress', labelKey: 'tab.progress', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
+  { route: '/(tabs)/profile', segment: 'profile', labelKey: 'tab.profile', icon: 'person-outline', iconActive: 'person' },
+];
+
+const TRAINER_NAV_ITEMS: NavItem[] = [
+  { route: '/(tabs)/dashboard', segment: 'dashboard', labelKey: 'tab.dashboard', icon: 'grid-outline', iconActive: 'grid' },
   { route: '/(tabs)/profile', segment: 'profile', labelKey: 'tab.profile', icon: 'person-outline', iconActive: 'person' },
 ];
 
@@ -132,6 +137,8 @@ export function Sidebar() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const activeSegment = segments[1] ?? 'index';
+  const isTrainer = profile?.role === 'trainer';
+  const navItems = isTrainer ? TRAINER_NAV_ITEMS : CLIENT_NAV_ITEMS;
 
   return (
     <View style={styles.container}>
@@ -141,7 +148,7 @@ export function Sidebar() {
       </View>
 
       <View style={styles.navSection}>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = activeSegment === item.segment;
           return (
             <Pressable
