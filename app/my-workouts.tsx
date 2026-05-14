@@ -123,6 +123,9 @@ export default function MyWorkoutsScreen() {
                 )}
               </View>
               <View style={styles.cardActions}>
+                <Pressable onPress={() => router.push(`/assign-workout?workoutId=${w.id}`)}>
+                  <Ionicons name="people-outline" size={20} color={colors.primary} />
+                </Pressable>
                 <Pressable onPress={() => handleDelete(w)}>
                   <Ionicons name="trash-outline" size={20} color={colors.error} />
                 </Pressable>

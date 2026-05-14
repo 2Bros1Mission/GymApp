@@ -310,6 +310,64 @@ export type Database = {
           },
         ]
       }
+      workout_assignments: {
+        Row: {
+          id: string
+          trainer_id: string
+          client_id: string
+          workout_id: string
+          assigned_at: string
+          due_date: string | null
+          status: string
+          completed_at: string | null
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          trainer_id: string
+          client_id: string
+          workout_id: string
+          assigned_at?: string
+          due_date?: string | null
+          status?: string
+          completed_at?: string | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          trainer_id?: string
+          client_id?: string
+          workout_id?: string
+          assigned_at?: string
+          due_date?: string | null
+          status?: string
+          completed_at?: string | null
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_assignments_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_assignments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_assignments_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "custom_workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_logs: {
         Row: {
           completed: boolean

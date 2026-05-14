@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress, RecentActivity } from '../types';
+import type { TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress, RecentActivity, WorkoutAssignment } from '../types';
 import type { Tables, TablesUpdate, Json } from '../types/database';
 
 interface ProfileJoin {
@@ -521,4 +521,137 @@ export async function getClientProgress(clientId: string): Promise<ClientProgres
     bodyMetrics: metrics,
     weeklyActivity,
   };
+}
+
+// ─── Workout Assignments ──────────────────────────────────────────────
+
+export async function assignWorkout(params: {
+  trainerId: string;
+  clientId: string;
+  workoutId: string;
+  dueDate?: string;
+  notes?: string;
+}): Promise<{ id?: string; error?: string }> {
+  const { data, error } = await supabase
+    .from('workout_assignments')
+    .insert({
+      trainer_id: params.trainerId,
+      client_id: params.clientId,
+      workout_id: params.workoutId,
+      due_date: params.dueDate ?? null,
+      notes: params.notes ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (error) return { error: error.message };
+  return { id: data?.id };
+}
+
+export async function unassignWorkout(assignmentId: string): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from('workout_assignments')
+    .delete()
+    .eq('id', assignmentId);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function getTrainerAssignments(trainerId: string, clientId?: string): Promise<WorkoutAssignment[]> {
+  let query = supabase
+    .from('workout_assignments')
+    .select(`
+      id,
+      trainer_id,
+      client_id,
+      workout_id,
+      assigned_at,
+      due_date,
+      status,
+      completed_at,
+      notes,
+      workout:custom_workouts!workout_assignments_workout_id_fkey ( name, name_bg ),
+      client:profiles!workout_assignments_client_id_fkey ( name )
+    `)
+    .eq('trainer_id', trainerId)
+    .order('assigned_at', { ascending: false });
+
+  if (clientId) {
+    query = query.eq('client_id', clientId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const workout = row.workout as unknown as { name: string; name_bg: string | null } | null;
+    const client = row.client as unknown as { name: string } | null;
+    return {
+      id: row.id,
+      trainerId: row.trainer_id,
+      clientId: row.client_id,
+      workoutId: row.workout_id,
+      assignedAt: row.assigned_at,
+      dueDate: row.due_date,
+      status: row.status as WorkoutAssignment['status'],
+      completedAt: row.completed_at,
+      notes: row.notes,
+      workoutName: workout?.name,
+      workoutNameBg: workout?.name_bg ?? undefined,
+      clientName: client?.name,
+    };
+  });
+}
+
+export async function getClientAssignments(clientId: string): Promise<WorkoutAssignment[]> {
+  const { data, error } = await supabase
+    .from('workout_assignments')
+    .select(`
+      id,
+      trainer_id,
+      client_id,
+      workout_id,
+      assigned_at,
+      due_date,
+      status,
+      completed_at,
+      notes,
+      workout:custom_workouts!workout_assignments_workout_id_fkey ( name, name_bg ),
+      trainer:profiles!workout_assignments_trainer_id_fkey ( name )
+    `)
+    .eq('client_id', clientId)
+    .eq('status', 'pending')
+    .order('assigned_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const workout = row.workout as unknown as { name: string; name_bg: string | null } | null;
+    const trainer = row.trainer as unknown as { name: string } | null;
+    return {
+      id: row.id,
+      trainerId: row.trainer_id,
+      clientId: row.client_id,
+      workoutId: row.workout_id,
+      assignedAt: row.assigned_at,
+      dueDate: row.due_date,
+      status: row.status as WorkoutAssignment['status'],
+      completedAt: row.completed_at,
+      notes: row.notes,
+      workoutName: workout?.name,
+      workoutNameBg: workout?.name_bg ?? undefined,
+      trainerName: trainer?.name,
+    };
+  });
+}
+
+export async function completeAssignment(assignmentId: string): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from('workout_assignments')
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .eq('id', assignmentId);
+
+  if (error) return { error: error.message };
+  return {};
 }
