@@ -1,5 +1,5 @@
 -- Workout assignments: trainers assign custom workouts to clients
--- Applied via CI workflow
+-- Applied via CI
 create table public.workout_assignments (
   id uuid default gen_random_uuid() primary key,
   trainer_id uuid references public.profiles(id) on delete cascade not null,
