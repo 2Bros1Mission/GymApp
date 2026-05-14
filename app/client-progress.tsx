@@ -323,7 +323,7 @@ export default function ClientProgressScreen() {
             <Text style={styles.sectionTitle}>{t('clientProgress.workoutHistory')}</Text>
             {progress.recentWorkouts.length > 0 ? (
               progress.recentWorkouts.map((w) => (
-                <View key={w.id} style={styles.workoutItem}>
+                <Pressable key={w.id} style={styles.workoutItem} onPress={() => router.push(`/workout-detail?workoutLogId=${w.id}&clientId=${clientId}`)}>
                   <View style={styles.workoutIcon}>
                     <Ionicons name="barbell" size={20} color={colors.primary} />
                   </View>
@@ -336,7 +336,8 @@ export default function ClientProgressScreen() {
                   <Text style={styles.workoutDuration}>
                     {formatDuration(w.durationSeconds)}
                   </Text>
-                </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </Pressable>
               ))
             ) : (
               <View style={styles.emptyCard}>

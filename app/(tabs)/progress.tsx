@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo } from 'react';
+import { useRouter } from 'expo-router';
 import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -99,22 +100,23 @@ function ProgressStat({ label, value, change, icon, colors }: {
   );
 }
 
-function WorkoutHistoryItem({ name, date, duration, colors }: {
+function WorkoutHistoryItem({ name, date, duration, colors, onPress }: {
   name: string;
   date: string;
   duration: string;
   colors: ColorPalette;
+  onPress?: () => void;
 }) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <View style={styles.historyItem}>
+    <Pressable style={styles.historyItem} onPress={onPress}>
       <View style={styles.historyDot} />
       <View style={styles.historyInfo}>
         <Text style={styles.historyName}>{name}</Text>
         <Text style={styles.historyMeta}>{date} · {duration}</Text>
       </View>
-      <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-    </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+    </Pressable>
   );
 }
 
@@ -130,6 +132,7 @@ function formatDuration(seconds: number | null, minLabel: string): string {
 }
 
 export default function ProgressScreen() {
+  const router = useRouter();
   const { user, profile } = useAuth();
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -243,6 +246,7 @@ export default function ProgressScreen() {
                           date={formatDate(log.date, months)}
                           duration={formatDuration(log.duration_seconds, minLabel)}
                           colors={colors}
+                          onPress={() => router.push(`/workout-detail?workoutLogId=${log.id}`)}
                         />
                       ))}
                     </View>
