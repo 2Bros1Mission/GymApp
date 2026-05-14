@@ -7,6 +7,7 @@ import { ColorPalette, Spacing, FontSize, BorderRadius } from '../src/constants/
 import { useTranslation } from '../src/contexts/LanguageContext';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { useBreakpoint } from '../src/hooks/useBreakpoint';
+import { useAuth } from '../src/contexts/AuthContext';
 import { useWorkoutBuilderForm } from '../src/hooks/useWorkoutBuilderForm';
 import { ExerciseFormCard } from '../src/components/ExerciseFormCard';
 import type { MuscleGroup, DifficultyLevel } from '../src/types';
@@ -48,9 +49,11 @@ export default function WorkoutBuilderScreen() {
   const { id: editId } = useLocalSearchParams<{ id?: string }>();
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { profile } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
   const isWide = breakpoint !== 'sm';
+  const isTrainer = profile?.role === 'trainer';
 
   const form = useWorkoutBuilderForm(editId);
 
@@ -192,7 +195,8 @@ export default function WorkoutBuilderScreen() {
             <Text style={styles.addExerciseBtnText}>{t('builder.addExercise')}</Text>
           </Pressable>
 
-          {/* Public toggle */}
+          {/* Public toggle (trainers only) */}
+          {isTrainer && (
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>{t('builder.public')}</Text>
             <Switch
@@ -202,6 +206,7 @@ export default function WorkoutBuilderScreen() {
               thumbColor={form.isPublic ? colors.primary : colors.textMuted}
             />
           </View>
+          )}
 
           {/* Feedback */}
           {form.success !== '' && (

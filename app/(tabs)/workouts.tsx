@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,13 +7,13 @@ import { ColorPalette, Spacing, FontSize, BorderRadius } from '../../src/constan
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { sampleWorkouts } from '../../src/data/workouts';
-import { DifficultyLevel, MuscleGroup, Workout, WorkoutAssignment } from '../../src/types';
+import { DifficultyLevel, MuscleGroup, Workout, WorkoutAssignment, CustomWorkout } from '../../src/types';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { SkeletonWorkoutCard } from '../../src/components/SkeletonLoader';
 import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
-import { getClientAssignments } from '../../src/lib/trainerService';
+import { getClientAssignments, getCustomWorkouts, deleteCustomWorkout } from '../../src/lib/trainerService';
 
 const muscleGroupIcons: Record<MuscleGroup, React.ComponentProps<typeof Ionicons>['name']> = {
   chest: 'body',
@@ -73,6 +73,19 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   assignedCardDue: { fontSize: FontSize.xs, color: colors.accent, marginTop: 4, fontWeight: '600' },
   startBtn: { backgroundColor: colors.primary, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
   startBtnText: { fontSize: FontSize.xs, fontWeight: '700', color: colors.white },
+  myWorkoutsSection: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg },
+  myWorkoutsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
+  myWorkoutsTitle: { fontSize: FontSize.lg, fontWeight: '700', color: colors.text },
+  createBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+  createBtnText: { fontSize: FontSize.xs, fontWeight: '700', color: colors.white },
+  myWorkoutCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  myWorkoutInfo: { flex: 1 },
+  myWorkoutName: { fontSize: FontSize.md, fontWeight: '700', color: colors.text },
+  myWorkoutMeta: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  myWorkoutActions: { flexDirection: 'row', gap: Spacing.sm },
+  actionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' },
+  emptyMyWorkouts: { alignItems: 'center', paddingVertical: Spacing.lg },
+  emptyMyWorkoutsText: { fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: Spacing.sm, textAlign: 'center' },
 });
 
 function WorkoutCard({ workout, onPress, colors }: { workout: Workout; onPress: () => void; colors: ColorPalette }) {
@@ -137,6 +150,35 @@ export default function WorkoutsScreen() {
     enabled: !!user && isClient,
   });
 
+  const myWorkoutsFetcher = useCallback(async (): Promise<CustomWorkout[]> => {
+    if (!user) return [];
+    return getCustomWorkouts(user.id);
+  }, [user]);
+
+  const { data: myWorkouts, loading: myWorkoutsLoading, retry: refetchMyWorkouts } = useFocusAsyncData({
+    fetcher: myWorkoutsFetcher,
+    defaultValue: [] as CustomWorkout[],
+    enabled: !!user,
+  });
+
+  const handleDeleteWorkout = useCallback((workoutId: string, workoutName: string) => {
+    Alert.alert(
+      t('builder.deleteConfirm'),
+      workoutName,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await deleteCustomWorkout(workoutId);
+            if (!error) refetchMyWorkouts();
+          },
+        },
+      ]
+    );
+  }, [t, refetchMyWorkouts]);
+
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(timer);
@@ -196,6 +238,50 @@ export default function WorkoutsScreen() {
         {isClient && assignmentsLoading && (
           <ActivityIndicator color={colors.primary} style={{ marginBottom: Spacing.md }} />
         )}
+
+        {/* My Custom Workouts section */}
+        <View style={styles.myWorkoutsSection}>
+          <View style={styles.myWorkoutsHeader}>
+            <Text style={styles.myWorkoutsTitle}>{t('builder.myWorkouts')}</Text>
+            <Pressable style={styles.createBtn} onPress={() => router.push('/workout-builder')}>
+              <Ionicons name="add" size={16} color={colors.white} />
+              <Text style={styles.createBtnText}>{t('builder.title')}</Text>
+            </Pressable>
+          </View>
+
+          {myWorkoutsLoading && <ActivityIndicator color={colors.primary} />}
+
+          {!myWorkoutsLoading && myWorkouts.length === 0 && (
+            <View style={styles.emptyMyWorkouts}>
+              <Text style={styles.emptyMyWorkoutsText}>{t('builder.noWorkouts')}</Text>
+              <Pressable style={styles.createBtn} onPress={() => router.push('/workout-builder')}>
+                <Ionicons name="add" size={16} color={colors.white} />
+                <Text style={styles.createBtnText}>{t('builder.createFirst')}</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {myWorkouts.map((w) => (
+            <View key={w.id} style={styles.myWorkoutCard}>
+              <Pressable style={styles.myWorkoutInfo} onPress={() => router.push(`/workout/${w.id}`)}>
+                <Text style={styles.myWorkoutName}>
+                  {language === 'bg' && w.nameBg ? w.nameBg : w.name}
+                </Text>
+                <Text style={styles.myWorkoutMeta}>
+                  {w.exercises.length} {t('workouts.exercises')} · {w.durationMinutes} {t('workouts.minutes')}
+                </Text>
+              </Pressable>
+              <View style={styles.myWorkoutActions}>
+                <Pressable style={styles.actionBtn} onPress={() => router.push(`/workout-builder?id=${w.id}`)}>
+                  <Ionicons name="pencil" size={16} color={colors.primary} />
+                </Pressable>
+                <Pressable style={styles.actionBtn} onPress={() => handleDeleteWorkout(w.id, w.name)}>
+                  <Ionicons name="trash" size={16} color={colors.error} />
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
 
         <ScrollView
           horizontal
