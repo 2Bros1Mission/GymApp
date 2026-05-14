@@ -256,6 +256,10 @@ export const translations: Translations = {
     'common.loading': 'Зареждане...',
     'common.fillAllFields': 'Моля, попълни всички полета',
 
+    'validation.invalidInput': 'Невалидни данни',
+    'validation.weightRange': 'Теглото трябва да е между 0 и 500 кг.',
+    'validation.repsRange': 'Повторенията трябва да са между 1 и 999.',
+
     'clientProgress.totalWorkouts': 'Общо тренировки',
     'clientProgress.streak': 'Серия',
     'clientProgress.lastWorkout': 'Последна тренировка',
@@ -565,6 +569,10 @@ export const translations: Translations = {
     'common.seconds': 's',
     'common.loading': 'Loading...',
     'common.fillAllFields': 'Please fill in all fields',
+
+    'validation.invalidInput': 'Invalid Input',
+    'validation.weightRange': 'Weight must be between 0 and 500 kg.',
+    'validation.repsRange': 'Reps must be between 1 and 999.',
 
     'clientProgress.totalWorkouts': 'Total Workouts',
     'clientProgress.streak': 'Streak',
