@@ -49,6 +49,45 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          id: string
+          trainer_id: string
+          client_id: string
+          last_message_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          trainer_id: string
+          client_id: string
+          last_message_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          trainer_id?: string
+          client_id?: string
+          last_message_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_workouts: {
         Row: {
           created_at: string
@@ -136,6 +175,48 @@ export type Database = {
             columns: ["workout_log_id"]
             isOneToOne: false
             referencedRelation: "workout_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          sender_id: string
+          content: string
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          sender_id: string
+          content: string
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          sender_id?: string
+          content?: string
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -425,6 +506,7 @@ export type Database = {
     Functions: {
       approve_connection: { Args: { p_connection_id: string }; Returns: Json }
       confirm_connection: { Args: { p_connection_id: string }; Returns: Json }
+      get_or_create_conversation: { Args: { p_other_user_id: string }; Returns: Json }
       redeem_invite_code: { Args: { p_code: string }; Returns: Json }
       reject_connection: { Args: { p_connection_id: string }; Returns: Json }
       save_workout: {
@@ -438,6 +520,7 @@ export type Database = {
         }
         Returns: string
       }
+      send_message: { Args: { p_conversation_id: string; p_content: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

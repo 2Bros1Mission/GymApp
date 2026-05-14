@@ -21,6 +21,7 @@ import {
   approveConnection,
   rejectConnection,
 } from '../src/lib/trainerService';
+import { getOrCreateConversation } from '../src/lib/messageService';
 import type { TrainerClient } from '../src/types';
 
 interface ClientsData {
@@ -257,6 +258,20 @@ export default function TrainerClientsScreen() {
                   {t('trainer.connectedSince')} {formatDate(client.connectedAt)}
                 </Text>
               </View>
+              <Pressable
+                style={styles.removeBtn}
+                onPress={() => {
+                  guardAction(async () => {
+                    const result = await getOrCreateConversation(client.clientId);
+                    if (result.success && result.conversationId) {
+                      router.push(`/chat?conversationId=${result.conversationId}`);
+                    }
+                  });
+                }}
+                onStartShouldSetResponder={() => true}
+              >
+                <Ionicons name="chatbubble-outline" size={22} color={colors.primary} />
+              </Pressable>
               <Pressable
                 style={styles.removeBtn}
                 onPress={() => handleRemoveClient(client)}
