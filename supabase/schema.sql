@@ -159,6 +159,118 @@ create policy "Users can update own metrics"
   on public.body_metrics for update
   using (auth.uid() = user_id);
 
+-- Trainer invite codes (trainer generates a 6-char code to share with clients)
+create table public.trainer_invites (
+  id uuid default gen_random_uuid() primary key,
+  trainer_id uuid references public.profiles on delete cascade not null,
+  code text not null unique,
+  expires_at timestamptz not null default (now() + interval '7 days'),
+  used boolean not null default false,
+  used_by uuid references public.profiles on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- Trainer-client relationships
+create table public.trainer_clients (
+  id uuid default gen_random_uuid() primary key,
+  trainer_id uuid references public.profiles on delete cascade not null,
+  client_id uuid references public.profiles on delete cascade not null,
+  status text not null default 'active' check (status in ('active', 'removed')),
+  connected_at timestamptz not null default now(),
+  unique (trainer_id, client_id)
+);
+
+-- Indexes
+create index idx_trainer_invites_code on public.trainer_invites (code);
+create index idx_trainer_invites_trainer on public.trainer_invites (trainer_id);
+create index idx_trainer_clients_trainer on public.trainer_clients (trainer_id);
+create index idx_trainer_clients_client on public.trainer_clients (client_id);
+
+-- RLS
+alter table public.trainer_invites enable row level security;
+alter table public.trainer_clients enable row level security;
+
+-- Trainer invites: trainers see their own, anyone can read by code (for redeeming)
+create policy "Trainers can manage own invites"
+  on public.trainer_invites for all
+  using (auth.uid() = trainer_id);
+
+create policy "Anyone can read invite by code"
+  on public.trainer_invites for select
+  using (true);
+
+-- Trainer clients: trainers see their clients, clients see their trainer
+create policy "Trainers can view own clients"
+  on public.trainer_clients for select
+  using (auth.uid() = trainer_id);
+
+create policy "Clients can view own trainer"
+  on public.trainer_clients for select
+  using (auth.uid() = client_id);
+
+create policy "System can insert trainer_clients"
+  on public.trainer_clients for insert
+  with check (true);
+
+create policy "Trainer can update own client relationships"
+  on public.trainer_clients for update
+  using (auth.uid() = trainer_id);
+
+create policy "Client can update own trainer relationship"
+  on public.trainer_clients for update
+  using (auth.uid() = client_id);
+
+-- RPC: Redeem invite code (atomic: validate code, create relationship, mark used)
+create or replace function public.redeem_invite_code(p_code text)
+returns jsonb as $$
+declare
+  v_invite record;
+  v_client_id uuid;
+  v_client_role text;
+begin
+  v_client_id := auth.uid();
+
+  -- Check client role
+  select role into v_client_role from public.profiles where id = v_client_id;
+  if v_client_role != 'client' then
+    return jsonb_build_object('success', false, 'error', 'only_clients');
+  end if;
+
+  -- Find valid invite
+  select * into v_invite from public.trainer_invites
+  where code = upper(p_code)
+    and used = false
+    and expires_at > now();
+
+  if v_invite is null then
+    return jsonb_build_object('success', false, 'error', 'invalid_code');
+  end if;
+
+  -- Check not already connected
+  if exists (
+    select 1 from public.trainer_clients
+    where trainer_id = v_invite.trainer_id
+      and client_id = v_client_id
+      and status = 'active'
+  ) then
+    return jsonb_build_object('success', false, 'error', 'already_connected');
+  end if;
+
+  -- Create relationship
+  insert into public.trainer_clients (trainer_id, client_id, status)
+  values (v_invite.trainer_id, v_client_id, 'active')
+  on conflict (trainer_id, client_id)
+  do update set status = 'active', connected_at = now();
+
+  -- Mark invite as used
+  update public.trainer_invites
+  set used = true, used_by = v_client_id
+  where id = v_invite.id;
+
+  return jsonb_build_object('success', true, 'trainer_id', v_invite.trainer_id);
+end;
+$$ language plpgsql security definer;
+
 -- Atomic workout save RPC (single transaction for workout_log + exercise_logs + set_logs)
 create or replace function public.save_workout(
   p_user_id uuid,
