@@ -2,27 +2,31 @@
 
 ## Current State (Updated 2026-05-14)
 
-22 open issues remain. Key dependencies (#14, #16, #19) are already closed/merged, unblocking the trainer feature chain. PR #69 (production hardening) added shared error handling, retry infrastructure, and cross-platform confirmation dialogs.
+Phase 1 (Infrastructure & Quality) and Phase 2 (Deployment Pipeline) are **complete**. Custom domain (#40) is backlogged. Phase 3 (Trainer-Client Workflow) is in progress — #66 (accept/reject flow) is done with follow-up bug fixes tracked in #80-#85.
 
 ## Dependency Chains
 
 ```
 Web deployment:
-  #38 (Expo export) → #39 (Vercel deploy) → #40 (custom domain)
+  #38 (Expo export) ✅ → #39 (Vercel deploy) ✅ → #40 (custom domain) 🔜 backlog
 
 Trainer workflow:
-  #66 (accept/reject flow) → #18 (client list) → #67 (client activity on dashboard)
+  #66 (accept/reject flow) ✅ → #18 (client list) → #67 (client activity on dashboard)
   #18 → #23 (client goals)
   #30 (user custom workouts) → #21 (public programs)
   #20 (workout assignment) → #22 (feedback/notes)
 
 Quality & DX:
-  #68 (Supabase types) — unblocks type safety everywhere
-  #63 (login test) — establishes test pattern
-  #38 (Expo export) → CI workflow (new recommendation)
+  #68 (Supabase types) ✅
+  #63 (login test) ✅
+  #38 (Expo export) ✅ → CI workflow ✅
+
+Bug fixes from #66:
+  #80 (hide trainer email), #81 (permanent trainer code), #82 (fix names showing '?'),
+  #83 (email confirmation), #84 (profile page not loading), #85 (client notification)
 
 Independent (no blockers):
-  #64, #65, #25, #26, #27, #28, #29, #24, #31
+  #25, #26, #27, #28, #29, #24, #31
 ```
 
 ## Mermaid Diagram
@@ -30,22 +34,24 @@ Independent (no blockers):
 ```mermaid
 graph TD
     %% Web deployment pipeline
-    38[#38 Expo export] --> 39[#39 Vercel deploy]
-    39 --> 40[#40 custom domain]
-    38 --> CI[CI workflow - new]
+    38[#38 Expo export ✅] --> 39[#39 Vercel deploy ✅]
+    39 --> 40[#40 custom domain 🔜]
+    38 --> CI[CI workflow ✅]
 
     %% Trainer workflow
-    66[#66 accept/reject flow] --> 18[#18 client list + progress]
+    66[#66 accept/reject flow ✅] --> 18[#18 client list + progress]
     18 --> 67[#67 client activity dashboard]
     18 --> 23[#23 client goals]
     30[#30 user custom workouts] --> 21[#21 public programs]
     20[#20 workout assignment] --> 22[#22 feedback/notes]
 
-    %% Quality
-    68[#68 Supabase types]
-    63[#63 login test]
-    64[#64 skeleton loading]
-    65[#65 offline destructive block]
+    %% Bug fixes from #66
+    66 --> 80[#80 hide trainer email]
+    66 --> 81[#81 permanent trainer code]
+    66 --> 82[#82 fix names '?']
+    66 --> 83[#83 email confirmation]
+    66 --> 84[#84 profile page]
+    66 --> 85[#85 client notification]
 
     %% Independent features
     25[#25 AI suggestions]
@@ -58,12 +64,15 @@ graph TD
 
     %% Styling
     classDef done fill:#2d6,stroke:#1a4,color:#fff
-    classDef infra fill:#f90,stroke:#c60,color:#fff
+    classDef backlog fill:#f90,stroke:#c60,color:#fff
     classDef core fill:#36f,stroke:#24c,color:#fff
+    classDef bug fill:#e44,stroke:#b22,color:#fff
     classDef future fill:#999,stroke:#666,color:#fff
 
-    class 38,39,40,CI infra
-    class 66,18,67,20,22,23,30,21 core
+    class 38,39,CI,66 done
+    class 40 backlog
+    class 18,67,20,22,23,30,21 core
+    class 80,81,82,83,84,85 bug
     class 25,26,27,28,29,24,31 future
 ```
 
@@ -93,96 +102,69 @@ The following dependencies are satisfied — no longer blockers:
 | #35 | Desktop sidebar navigation | Merged |
 | #36 | Responsive layout adjustments | Merged |
 | #37 | PWA config | Merged |
+| #38 | Expo static export config | Merged |
+| #39 | Vercel deployment | Merged |
+| #63 | Login screen component test | Merged |
+| #64 | Skeleton/loading for workouts | Merged |
+| #65 | Block destructive actions offline | Merged |
+| #66 | Accept/reject trainer-client flow | Merged |
+| #68 | Supabase type generation | Merged |
 
 ## Recommended Resolution Order
 
-### Phase 1 — Infrastructure & Quality (do first)
+### ~~Phase 1 — Infrastructure & Quality~~ ✅ COMPLETE
+
+All items resolved: #38, #68, #63, #64, #65, CI workflow.
+
+### ~~Phase 2 — Deployment Pipeline~~ ✅ COMPLETE
+
+#39 merged. #40 (custom domain) deferred to backlog — no code dependency, just DNS purchase.
+
+### Phase 3 — Trainer-Client Workflow (core value) ← CURRENT
 
 | Order | Issue | Rationale |
 |---|---|---|
-| 1 | #38 — Expo static export config | Unblocks deployment pipeline and CI |
-| 2 | #68 — Supabase type generation | Unblocks type safety across all features |
-| 3 | #63 — Login screen component test | Quick win, establishes test patterns |
-| 4 | #64 — Skeleton/loading for workouts | UX polish, small scope |
-| 5 | #65 — Block destructive actions offline | Safety net, builds on PR #69 confirm infra |
-| — | **CI workflow** (new) | Add after #38; lint + tsc + expo export on PRs |
-
-### Phase 2 — Deployment Pipeline
-
-| Order | Issue | Rationale |
-|---|---|---|
-| 6 | #39 — Vercel deployment | Depends on #38 |
-| 7 | #40 — Custom domain | Depends on #39; final deployment step |
-
-### Phase 3 — Trainer-Client Workflow (core value)
-
-| Order | Issue | Rationale |
-|---|---|---|
-| 8 | #66 — Accept/reject trainer-client | Completes connection UX |
-| 9 | #18 — Client list & progress monitoring | Trainer's primary view |
-| 10 | #67 — Client workout activity on dashboard | Builds on #18, high value |
-| 11 | #20 — Workout assignment trainer→client | Core trainer feature |
-| 12 | #30 — Users create custom workouts | Builder already exists, add user-facing flow |
-| 13 | #21 — Public workout programs | Marketplace, depends on workout content |
-| 14 | #23 — Client goal setting | Leverages #18 progress data |
-| 15 | #22 — Workout feedback/notes | Depends on #20 assignment flow |
+| — | #80-#85 — Bug fixes from #66 | Polish existing flow before building on it |
+| 8 | #18 — Client list & progress monitoring | Trainer's primary view |
+| 9 | #67 — Client workout activity on dashboard | Builds on #18, high value |
+| 10 | #20 — Workout assignment trainer→client | Core trainer feature |
+| 11 | #30 — Users create custom workouts | Builder already exists, add user-facing flow |
+| 12 | #21 — Public workout programs | Marketplace, depends on workout content |
+| 13 | #23 — Client goal setting | Leverages #18 progress data |
+| 14 | #22 — Workout feedback/notes | Depends on #20 assignment flow |
 
 ### Phase 4 — Advanced Features
 
 | Order | Issue | Rationale |
 |---|---|---|
-| 16 | #31 — In-app messaging | Large scope, all deps already met |
-| 17 | #25 — AI programming suggestions | Independent, medium scope |
-| 18 | #24 — Video form checks | Complex (camera/upload), independent |
+| 15 | #31 — In-app messaging | Large scope, all deps already met |
+| 16 | #25 — AI programming suggestions | Independent, medium scope |
+| 17 | #24 — Video form checks | Complex (camera/upload), independent |
 
 ### Phase 5 — Wellness & Gamification (lowest priority)
 
 | Order | Issue | Rationale |
 |---|---|---|
-| 19 | #26 — Nutrition logging | New domain, no deps |
-| 20 | #27 — Sleep & recovery tracking | New domain, no deps |
-| 21 | #28 — Gamification: challenges | Best after core features exist |
-| 22 | #29 — Gamification: achievements | Best after core features exist |
-
-## CI Workflow Recommendation (New)
-
-**Add a GitHub Actions workflow after #38 is resolved.** Prerequisites:
-
-1. Expo static export must work (#38)
-2. `tsconfig.json` must be configured for `tsc --noEmit`
-3. Test script in `package.json` (even if minimal, from #63)
-
-**Suggested pipeline:**
-```yaml
-# .github/workflows/ci.yml
-on: [pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version-file: '.nvmrc' }
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npx expo export --platform web
-      - run: npm test -- --passWithNoTests
-```
-
-**Value:** Catches type errors and build breakage on every PR before merge.
+| 18 | #26 — Nutrition logging | New domain, no deps |
+| 19 | #27 — Sleep & recovery tracking | New domain, no deps |
+| 20 | #28 — Gamification: challenges | Best after core features exist |
+| 21 | #29 — Gamification: achievements | Best after core features exist |
 
 ## Critical Path
 
-The two critical paths through the graph:
+The primary critical path now is the **trainer workflow:**
 
-1. **Deployment:** #38 → CI → #39 → #40 (gets app live for users)
-2. **Trainer workflow:** #66 → #18 → #20 → #22 (completes trainer value prop)
+```
+#80-#85 (bug fixes) → #18 (client list) → #20 (assignment) → #22 (feedback)
+```
 
-These can be worked in parallel since they have no shared dependencies.
+Secondary paths (#30→#21, #18→#67, #18→#23) can be parallelized.
 
 ## Notes
 
-- Issues #63-#68 were created as follow-ups from PR #69 (production hardening)
-- #68 is blocked by needing the Supabase project ID — can be unblocked by checking project settings
-- Phases 3-5 can overlap with Phase 2 if multiple people are working
+- Phase 1+2 completed 2026-05-14
+- #66 follow-up bugs (#80-#85) should be resolved before starting #18
+- #40 (custom domain) requires purchasing a domain — no code changes needed
+- #78 (CI Supabase env vars) is a DX improvement, not blocking anything
+- Phases 3-5 can overlap if multiple people are working
 - #24 (video form checks) and #31 (messaging) are the largest scope items remaining
