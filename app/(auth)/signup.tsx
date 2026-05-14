@@ -8,11 +8,13 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { useOfflineGuard } from '../../src/hooks/useOfflineGuard';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
   const { t } = useTranslation();
+  const { guardAction } = useOfflineGuard();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -68,28 +70,30 @@ export default function SignupScreen() {
 
   const isFormValid = name.trim() !== '' && email.trim() !== '' && password.trim() !== '';
 
-  const handleSignup = async () => {
-    const nErr = validateName(name);
-    const eErr = validateEmail(email);
-    const pErr = validatePassword(password);
-    setNameError(nErr);
-    setEmailError(eErr);
-    setPasswordError(pErr);
+  const handleSignup = () => {
+    guardAction(async () => {
+      const nErr = validateName(name);
+      const eErr = validateEmail(email);
+      const pErr = validatePassword(password);
+      setNameError(nErr);
+      setEmailError(eErr);
+      setPasswordError(pErr);
 
-    if (nErr || eErr || pErr) return;
+      if (nErr || eErr || pErr) return;
 
-    setLoading(true);
-    setError('');
+      setLoading(true);
+      setError('');
 
-    const { error: signUpError } = await signUp(email.trim(), password, name.trim(), role);
+      const { error: signUpError } = await signUp(email.trim(), password, name.trim(), role);
 
-    setLoading(false);
+      setLoading(false);
 
-    if (signUpError) {
-      setError(signUpError);
-    } else {
-      setSuccess(true);
-    }
+      if (signUpError) {
+        setError(signUpError);
+      } else {
+        setSuccess(true);
+      }
+    });
   };
 
   const breakpoint = useBreakpoint();

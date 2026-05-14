@@ -9,11 +9,13 @@ import { useTranslation } from '../../src/contexts/LanguageContext';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { supabase } from '../../src/lib/supabase';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { useOfflineGuard } from '../../src/hooks/useOfflineGuard';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
   const { t } = useTranslation();
+  const { guardAction, isConnected } = useOfflineGuard();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,45 +57,49 @@ export default function LoginScreen() {
 
   const isFormValid = email.trim() !== '' && password.trim() !== '';
 
-  const handleForgotPassword = async () => {
-    const eErr = validateEmail(email);
-    if (eErr) {
-      setEmailError(eErr);
-      return;
-    }
+  const handleForgotPassword = () => {
+    guardAction(async () => {
+      const eErr = validateEmail(email);
+      if (eErr) {
+        setEmailError(eErr);
+        return;
+      }
 
-    setResetLoading(true);
-    setError('');
-    setResetSent(false);
+      setResetLoading(true);
+      setError('');
+      setResetSent(false);
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim());
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim());
 
-    setResetLoading(false);
+      setResetLoading(false);
 
-    if (resetError) {
-      setError(resetError.message);
-    } else {
-      setResetSent(true);
-    }
+      if (resetError) {
+        setError(resetError.message);
+      } else {
+        setResetSent(true);
+      }
+    });
   };
 
-  const handleLogin = async () => {
-    const eErr = validateEmail(email);
-    const pErr = validatePassword(password);
-    setEmailError(eErr);
-    setPasswordError(pErr);
+  const handleLogin = () => {
+    guardAction(async () => {
+      const eErr = validateEmail(email);
+      const pErr = validatePassword(password);
+      setEmailError(eErr);
+      setPasswordError(pErr);
 
-    if (eErr || pErr) return;
+      if (eErr || pErr) return;
 
-    setLoading(true);
-    setError('');
+      setLoading(true);
+      setError('');
 
-    const { error: signInError } = await signIn(email.trim(), password);
+      const { error: signInError } = await signIn(email.trim(), password);
 
-    if (signInError) {
-      setError(signInError);
-      setLoading(false);
-    }
+      if (signInError) {
+        setError(signInError);
+        setLoading(false);
+      }
+    });
   };
 
   const breakpoint = useBreakpoint();
