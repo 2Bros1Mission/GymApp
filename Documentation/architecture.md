@@ -19,6 +19,146 @@ GymApp is a bilingual (Bulgarian/English) mobile fitness application that connec
 | Icons | @expo/vector-icons | Ionicons |
 | State | React Context | + local component state |
 
+## System Context
+
+```mermaid
+flowchart TB
+    subgraph Users
+        CU[Client User]
+        TU[Trainer User]
+    end
+
+    subgraph GymApp["GymApp (React Native + Expo)"]
+        Mobile[Mobile App<br/>iOS / Android]
+        Web[Web App<br/>PWA Export]
+    end
+
+    subgraph Supabase["Supabase Cloud"]
+        Auth[Auth Service<br/>Email/Password OIDC]
+        DB[(PostgreSQL<br/>+ RLS Policies)]
+        RPC[RPC Functions<br/>Atomic Transactions]
+    end
+
+    Expo[Expo Push Service<br/>Local Notifications]
+    Vercel[Vercel<br/>Static Web Hosting]
+    GHA[GitHub Actions<br/>CI Pipeline]
+
+    CU --> Mobile
+    CU --> Web
+    TU --> Mobile
+    TU --> Web
+
+    Mobile --> Auth
+    Mobile --> DB
+    Mobile --> RPC
+    Mobile --> Expo
+    Web --> Auth
+    Web --> DB
+    Web --> RPC
+
+    GHA -->|deploy| Vercel
+    Vercel -->|serves| Web
+```
+
+## Component Architecture
+
+```mermaid
+flowchart TB
+    subgraph Presentation["Presentation Layer (app/)"]
+        AuthScreens["(auth) group<br/>welcome, login, signup"]
+        TabScreens["(tabs) group<br/>home, workouts, progress, profile"]
+        Modals["Modal screens<br/>workout-builder, active-workout,<br/>trainer-clients, client-progress"]
+    end
+
+    subgraph State["State Layer (src/contexts/)"]
+        AuthCtx[AuthContext<br/>session, profile, auth methods]
+        LangCtx[LanguageContext<br/>reactive i18n, t function]
+        NetCtx[NetworkContext<br/>connectivity status]
+        ThemeCtx[ThemeContext<br/>dark/light mode, colors]
+    end
+
+    subgraph Services["Service Layer (src/lib/)"]
+        WS[workoutService<br/>logs, stats, body metrics]
+        TS[trainerService<br/>connections, custom workouts,<br/>client progress]
+        NS[notificationService<br/>daily reminders, prefs]
+    end
+
+    subgraph Infra["Infrastructure Layer"]
+        Supa[supabase.ts<br/>client + SecureStore adapter]
+        ExpoAPIs[Expo APIs<br/>Notifications, SecureStore,<br/>Device, Clipboard]
+        AsyncStore[AsyncStorage<br/>theme prefs, notification prefs]
+    end
+
+    Presentation --> State
+    Presentation --> Services
+    Services --> Infra
+    State --> Infra
+```
+
+## Data Flow
+
+### Read Flow
+
+```mermaid
+sequenceDiagram
+    participant S as Screen
+    participant H as useAsyncData / useFocusAsyncData
+    participant SVC as Service Function
+    participant C as Supabase Client
+    participant DB as PostgreSQL + RLS
+
+    S->>H: mount / focus
+    H->>SVC: call fetcher()
+    SVC->>C: .from(table).select(...)
+    C->>DB: SQL query
+    DB-->>DB: RLS policy check (auth.uid())
+    DB-->>C: rows
+    C-->>SVC: { data, error }
+    SVC-->>H: typed result or throw
+    H-->>S: { data, loading, error }
+```
+
+### Atomic Write Flow (via RPC)
+
+```mermaid
+sequenceDiagram
+    participant S as Screen
+    participant SVC as Service Function
+    participant C as Supabase Client
+    participant RPC as PostgreSQL RPC
+    participant T1 as workout_logs
+    participant T2 as exercise_logs
+    participant T3 as set_logs
+
+    S->>SVC: saveWorkoutLog(params)
+    SVC->>C: supabase.rpc('save_workout', {...})
+    C->>RPC: BEGIN transaction
+    RPC->>T1: INSERT workout_log
+    RPC->>T2: INSERT exercise_logs (loop)
+    RPC->>T3: INSERT set_logs (loop)
+    RPC-->>RPC: COMMIT
+    RPC-->>C: workout_log_id
+    C-->>SVC: { data }
+    SVC-->>S: { error: null, workoutLogId }
+```
+
+## External Dependencies
+
+| Package | Purpose | Runtime? |
+|---------|---------|----------|
+| `@supabase/supabase-js` | Auth, database queries, RPC calls | Yes |
+| `expo-notifications` | Local daily workout reminders | Yes |
+| `expo-secure-store` | Secure token persistence (native) | Yes |
+| `expo-device` | Physical device check for notifications | Yes |
+| `expo-clipboard` | Copy invite codes | Yes |
+| `expo-image` | Optimized image display | Yes |
+| `expo-linear-gradient` | UI gradient backgrounds | Yes |
+| `@react-native-community/netinfo` | Network connectivity detection | Yes |
+| `@react-native-async-storage/async-storage` | Theme + notification preferences | Yes |
+| `react-native-gesture-handler` | Navigation gestures | Yes |
+| `react-native-reanimated` | Animations and transitions | Yes |
+| `react-native-safe-area-context` | Safe area insets | Yes |
+
 ## Project Structure
 
 ```
@@ -98,13 +238,13 @@ User opens app
 | Progress | `stats-chart` | Analytics + body metrics |
 | Profile | `person` | User settings |
 
-### Planned: Conditional Navigation
+### Conditional Navigation
 
-The tab layout will conditionally render based on `profile.role`:
+The tab layout conditionally renders based on `profile.role`:
 - **Client tabs:** Home, Workouts, Progress, Profile
 - **Trainer tabs:** Dashboard, Clients, Programs, Profile
 
-This will be implemented via a separate `(trainer-tabs)` route group with a role-based redirect in the root layout.
+The root layout uses a role-based redirect to direct trainers to the dashboard and clients to the home tab.
 
 ## Authentication
 
@@ -191,9 +331,42 @@ Initializes the Supabase client with:
 - Custom `ExpoSecureStoreAdapter` for token storage
 - **Dev proxy fallback:** If env vars are missing, uses a local proxy URL for development without Supabase credentials
 
-### Planned: `trainerService.ts`
+### `trainerService.ts`
 
-Will handle all trainer operations: invite codes, client management, workout templates, assignments, feedback, goals.
+| Function | Purpose |
+|----------|---------|
+| `createInviteCode()` | Generate 6-char invite code for client onboarding |
+| `getActiveInvites()` | List unused, non-expired invite codes |
+| `redeemInviteCode()` | Client redeems code, creates pending connection |
+| `getTrainerClients()` | Get trainer's active connected clients |
+| `getPendingRequests()` | Get pending (client-confirmed) connection requests |
+| `getClientTrainer()` | Get client's current trainer connection |
+| `removeConnection()` | Either party removes the connection |
+| `confirmConnection()` | Client confirms connection via RPC |
+| `approveConnection()` | Trainer approves pending connection via RPC |
+| `rejectConnection()` | Trainer rejects pending connection via RPC |
+| `getCustomWorkouts()` | List trainer's custom workout templates |
+| `getCustomWorkout()` | Get single custom workout by ID |
+| `createCustomWorkout()` | Create new custom workout |
+| `updateCustomWorkout()` | Update existing custom workout fields |
+| `deleteCustomWorkout()` | Delete a custom workout |
+| `getClientProfile()` | Get client profile (trainer access via RLS) |
+| `getClientWorkoutLogs()` | Get client's workout history (trainer access) |
+| `getClientBodyMetrics()` | Get client's body metrics (trainer access) |
+| `getClientProgress()` | Full aggregated client progress data |
+
+### `notificationService.ts`
+
+| Function | Purpose |
+|----------|---------|
+| `requestNotificationPermission()` | Request OS notification permission |
+| `getNotificationPreferences()` | Load prefs from AsyncStorage |
+| `saveNotificationPreferences()` | Persist prefs to AsyncStorage |
+| `scheduleDailyReminder()` | Schedule daily workout reminder |
+| `cancelDailyReminder()` | Cancel scheduled reminder |
+| `toggleNotifications()` | Enable/disable with permission handling |
+| `updateReminderTime()` | Reschedule at new time |
+| `addNotificationResponseListener()` | Handle notification taps |
 
 ## Design System
 
