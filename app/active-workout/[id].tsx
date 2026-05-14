@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,6 +11,45 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { saveWorkoutLog } from '../../src/lib/workoutService';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { useOfflineGuard } from '../../src/hooks/useOfflineGuard';
+
+const MAX_WEIGHT = 500;
+const MAX_REPS = 999;
+
+/**
+ * Sanitise numeric input: strip non-digit/non-dot characters.
+ * For weight: allow one decimal point and up to 1 decimal place.
+ * For reps: integers only.
+ */
+function sanitizeNumericInput(value: string, field: 'weight' | 'reps'): string {
+  if (field === 'reps') {
+    // Integers only — strip everything except digits
+    return value.replace(/[^0-9]/g, '');
+  }
+  // Weight — allow digits and one decimal point
+  let sanitized = value.replace(/[^0-9.]/g, '');
+  // Only keep the first decimal point
+  const parts = sanitized.split('.');
+  if (parts.length > 2) {
+    sanitized = parts[0] + '.' + parts.slice(1).join('');
+  }
+  // Limit to 1 decimal place
+  if (parts.length === 2 && parts[1].length > 1) {
+    sanitized = parts[0] + '.' + parts[1].substring(0, 1);
+  }
+  return sanitized;
+}
+
+/**
+ * Check whether a set has valid data for completion.
+ */
+function isSetValid(weight: string, reps: string): { valid: boolean; reason: 'weight' | 'reps' | null } {
+  const w = parseFloat(weight);
+  const r = parseInt(reps, 10);
+
+  if (isNaN(w) || w < 0 || w > MAX_WEIGHT) return { valid: false, reason: 'weight' };
+  if (isNaN(r) || r < 1 || r > MAX_REPS) return { valid: false, reason: 'reps' };
+  return { valid: true, reason: null };
+}
 
 interface ActiveSet {
   setNumber: number;
@@ -172,7 +211,29 @@ export default function ActiveWorkoutScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const toggleSetComplete = (setIndex: number) => {
+    const set = currentExercise.sets[setIndex];
+
+    // When marking as complete (not unchecking), validate inputs
+    if (!set.completed) {
+      const { valid, reason } = isSetValid(set.weight, set.reps);
+      if (!valid) {
+        const msg = reason === 'weight'
+          ? t('validation.weightRange')
+          : t('validation.repsRange');
+        showAlert(t('validation.invalidInput'), msg);
+        return;
+      }
+    }
+
     setExercises((prev) => {
       const updated = [...prev];
       const ex = { ...updated[currentExerciseIndex] };
@@ -183,18 +244,19 @@ export default function ActiveWorkoutScreen() {
       return updated;
     });
 
-    if (!currentExercise.sets[setIndex].completed) {
+    if (!set.completed) {
       setRestTimer(currentExercise.restSeconds);
       setIsResting(true);
     }
   };
 
   const updateSetField = (setIndex: number, field: 'weight' | 'reps', value: string) => {
+    const sanitized = sanitizeNumericInput(value, field);
     setExercises((prev) => {
       const updated = [...prev];
       const ex = { ...updated[currentExerciseIndex] };
       const sets = [...ex.sets];
-      sets[setIndex] = { ...sets[setIndex], [field]: value };
+      sets[setIndex] = { ...sets[setIndex], [field]: sanitized };
       ex.sets = sets;
       updated[currentExerciseIndex] = ex;
       return updated;
