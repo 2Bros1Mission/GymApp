@@ -10,7 +10,8 @@ import { useBreakpoint } from '../src/hooks/useBreakpoint';
 import { useFocusAsyncData } from '../src/hooks/useAsyncData';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { getClientProgress } from '../src/lib/trainerService';
-import type { ClientProgress } from '../src/types';
+import { getClientGoalsForTrainer } from '../src/lib/goalService';
+import type { ClientProgress, ClientGoal } from '../src/types';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -64,6 +65,20 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
 
   emptyCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.lg, alignItems: 'center', gap: Spacing.sm },
   emptyText: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center' },
+
+  goalsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+  suggestBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+  suggestBtnText: { fontSize: FontSize.xs, fontWeight: '700', color: colors.white },
+  goalItem: { backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
+  goalItemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.xs },
+  goalItemTitle: { fontSize: FontSize.md, fontWeight: '600', color: colors.text, flex: 1 },
+  goalItemBadge: { backgroundColor: colors.primaryDark, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.sm },
+  goalItemBadgeText: { fontSize: 10, fontWeight: '600', color: colors.primaryLight },
+  goalItemProgress: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  goalItemBar: { flex: 1, height: 6, backgroundColor: colors.surfaceLight, borderRadius: BorderRadius.full, overflow: 'hidden' },
+  goalItemFill: { height: '100%', backgroundColor: colors.primary, borderRadius: BorderRadius.full },
+  goalItemPct: { fontSize: FontSize.xs, fontWeight: '600', color: colors.primary, minWidth: 50, textAlign: 'right' },
+  adjustBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.xs, alignSelf: 'flex-end' },
 });
 
 const EMPTY_PROGRESS: ClientProgress = {
@@ -99,6 +114,17 @@ export default function ClientProgressScreen() {
   const { data: progress, loading, error, retry } = useFocusAsyncData({
     fetcher,
     defaultValue: EMPTY_PROGRESS,
+    enabled: !!clientId,
+  });
+
+  const goalsFetcher = useCallback(async () => {
+    if (!clientId) return [];
+    return getClientGoalsForTrainer(clientId);
+  }, [clientId]);
+
+  const { data: clientGoals } = useFocusAsyncData({
+    fetcher: goalsFetcher,
+    defaultValue: [] as ClientGoal[],
     enabled: !!clientId,
   });
 
@@ -245,6 +271,48 @@ export default function ClientProgressScreen() {
               ))}
             </View>
 
+            {/* Client Goals */}
+            <View style={styles.goalsHeader}>
+              <Text style={styles.sectionTitle}>{t('goals.title')}</Text>
+              <Pressable style={styles.suggestBtn} onPress={() => router.push(`/suggest-goal?clientId=${clientId}`)}>
+                <Ionicons name="bulb" size={14} color={colors.white} />
+                <Text style={styles.suggestBtnText}>{t('suggestions.suggest')}</Text>
+              </Pressable>
+            </View>
+            {clientGoals.length > 0 ? (
+              clientGoals.map((goal) => {
+                const pct = goal.targetValue ? Math.min((goal.currentValue ?? 0) / goal.targetValue, 1) : 0;
+                return (
+                  <View key={goal.id} style={styles.goalItem}>
+                    <View style={styles.goalItemHeader}>
+                      <Text style={styles.goalItemTitle}>{goal.title}</Text>
+                      <View style={styles.goalItemBadge}>
+                        <Text style={styles.goalItemBadgeText}>{t(`goals.type.${goal.goalType}`)}</Text>
+                      </View>
+                    </View>
+                    {goal.targetValue != null && (
+                      <View style={styles.goalItemProgress}>
+                        <View style={styles.goalItemBar}>
+                          <View style={[styles.goalItemFill, { width: `${pct * 100}%` }]} />
+                        </View>
+                        <Text style={styles.goalItemPct}>
+                          {goal.currentValue ?? 0}/{goal.targetValue} {goal.unit ?? ''}
+                        </Text>
+                      </View>
+                    )}
+                    <Pressable style={styles.adjustBtn} onPress={() => router.push(`/suggest-goal?clientId=${clientId}&goalId=${goal.id}`)}>
+                      <Ionicons name="arrow-up" size={16} color={colors.accent} />
+                    </Pressable>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyCard}>
+                <Ionicons name="flag-outline" size={32} color={colors.textMuted} />
+                <Text style={styles.emptyText}>{t('goals.noGoals')}</Text>
+              </View>
+            )}
+
             {/* Weight chart */}
             <Text style={styles.sectionTitle}>{t('clientProgress.weightHistory')}</Text>
             <View style={styles.chartContainer}>
@@ -255,7 +323,7 @@ export default function ClientProgressScreen() {
             <Text style={styles.sectionTitle}>{t('clientProgress.workoutHistory')}</Text>
             {progress.recentWorkouts.length > 0 ? (
               progress.recentWorkouts.map((w) => (
-                <View key={w.id} style={styles.workoutItem}>
+                <Pressable key={w.id} style={styles.workoutItem} onPress={() => router.push(`/workout-detail?workoutLogId=${w.id}&clientId=${clientId}`)}>
                   <View style={styles.workoutIcon}>
                     <Ionicons name="barbell" size={20} color={colors.primary} />
                   </View>
@@ -268,7 +336,8 @@ export default function ClientProgressScreen() {
                   <Text style={styles.workoutDuration}>
                     {formatDuration(w.durationSeconds)}
                   </Text>
-                </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </Pressable>
               ))
             ) : (
               <View style={styles.emptyCard}>

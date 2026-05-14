@@ -9,9 +9,12 @@ import { useTranslation } from '../../src/contexts/LanguageContext';
 import { sampleWorkouts } from '../../src/data/workouts';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { getWorkoutStats } from '../../src/lib/workoutService';
+import { getClientGoals, getPendingSuggestions, refreshGoalProgress } from '../../src/lib/goalService';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { SkeletonStatCard, SkeletonBox } from '../../src/components/SkeletonLoader';
+import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
+import type { ClientGoal, GoalSuggestion } from '../../src/types';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -61,6 +64,10 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   goalProgress: { fontSize: FontSize.sm, color: colors.primary, fontWeight: '700' },
   progressBar: { height: 6, backgroundColor: colors.surfaceLight, borderRadius: BorderRadius.full, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: BorderRadius.full },
+  goalsSeeAll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: Spacing.lg, paddingVertical: Spacing.sm, gap: Spacing.xs },
+  goalsSeeAllText: { fontSize: FontSize.sm, color: colors.primary, fontWeight: '600' },
+  suggestionBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginHorizontal: Spacing.lg, backgroundColor: colors.accent + '15', borderRadius: BorderRadius.md, padding: Spacing.sm, marginBottom: Spacing.sm },
+  suggestionBadgeText: { fontSize: FontSize.sm, color: colors.accent, fontWeight: '600', flex: 1 },
   errorCard: {
     marginHorizontal: Spacing.lg, backgroundColor: colors.error + '12',
     borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.md,
@@ -130,6 +137,31 @@ export default function HomeScreen() {
   useEffect(() => {
     loadStats();
   }, [loadStats]);
+
+  const goalsFetcher = useCallback(async (): Promise<ClientGoal[]> => {
+    if (!user) return [];
+    const goals = await getClientGoals(user.id);
+    return refreshGoalProgress(user.id, goals);
+  }, [user]);
+
+  const suggestionsFetcher = useCallback(async (): Promise<GoalSuggestion[]> => {
+    if (!user) return [];
+    return getPendingSuggestions(user.id);
+  }, [user]);
+
+  const { data: clientGoals } = useFocusAsyncData({
+    fetcher: goalsFetcher,
+    defaultValue: [] as ClientGoal[],
+    enabled: !!user,
+  });
+
+  const { data: pendingSuggestions } = useFocusAsyncData({
+    fetcher: suggestionsFetcher,
+    defaultValue: [] as GoalSuggestion[],
+    enabled: !!user,
+  });
+
+  const activeGoals = clientGoals.filter((g) => g.status === 'active').slice(0, 3);
 
   const displayName = profile?.name || t('home.defaultName');
 
@@ -201,6 +233,40 @@ export default function HomeScreen() {
                 <View style={styles.goalCard}>
                   <SkeletonBox width="100%" height={6} borderRadius={3} />
                 </View>
+              ) : activeGoals.length > 0 ? (
+                <>
+                  {pendingSuggestions.length > 0 && (
+                    <Pressable style={styles.suggestionBadge} onPress={() => router.push('/goals')}>
+                      <Ionicons name="bulb" size={18} color={colors.accent} />
+                      <Text style={styles.suggestionBadgeText}>
+                        {pendingSuggestions.length} {t('suggestions.pending').toLowerCase()}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={16} color={colors.accent} />
+                    </Pressable>
+                  )}
+                  {activeGoals.map((goal) => {
+                    const pct = goal.targetValue ? Math.min((goal.currentValue ?? 0) / goal.targetValue, 1) : 0;
+                    return (
+                      <View key={goal.id} style={styles.goalCard}>
+                        <View style={styles.goalRow}>
+                          <Text style={styles.goalText}>{goal.title}</Text>
+                          <Text style={styles.goalProgress}>
+                            {goal.targetValue ? `${goal.currentValue ?? 0}/${goal.targetValue}` : ''}
+                          </Text>
+                        </View>
+                        {goal.targetValue != null && (
+                          <View style={styles.progressBar}>
+                            <View style={[styles.progressFill, { width: `${Math.min(pct * 100, 100)}%` }]} />
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                  <Pressable style={styles.goalsSeeAll} onPress={() => router.push('/goals')}>
+                    <Text style={styles.goalsSeeAllText}>{t('goals.seeAll')}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  </Pressable>
+                </>
               ) : (
                 <View style={styles.goalCard}>
                   <View style={styles.goalRow}>
