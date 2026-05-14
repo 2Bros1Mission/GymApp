@@ -98,6 +98,8 @@ export default function ActiveWorkoutScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const breakpoint = useBreakpoint();
+  const isWide = breakpoint !== 'sm';
 
   useEffect(() => {
     if (workout) {
@@ -247,9 +249,6 @@ export default function ActiveWorkoutScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
     await doSave();
   };
-
-  const breakpoint = useBreakpoint();
-  const isWide = breakpoint !== 'sm';
 
   if (workoutComplete) {
     return (
