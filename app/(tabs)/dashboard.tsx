@@ -10,12 +10,12 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { ErrorCard } from '../../src/components/ErrorCard';
 import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
-import { getTrainerClients, getActiveInvites, getCustomWorkouts } from '../../src/lib/trainerService';
-import type { TrainerClient, TrainerInvite, CustomWorkout } from '../../src/types';
+import { getTrainerClients, getCustomWorkouts, getTrainerCode } from '../../src/lib/trainerService';
+import type { TrainerClient, CustomWorkout } from '../../src/types';
 
 interface DashboardData {
   clients: TrainerClient[];
-  invites: TrainerInvite[];
+  trainerCode: string | null;
   workouts: CustomWorkout[];
 }
 
@@ -64,22 +64,22 @@ export default function TrainerDashboardScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const fetcher = useCallback(async (): Promise<DashboardData> => {
-    if (!user) return { clients: [], invites: [], workouts: [] };
-    const [clients, invites, workouts] = await Promise.all([
+    if (!user) return { clients: [], trainerCode: null, workouts: [] };
+    const [clients, trainerCode, workouts] = await Promise.all([
       getTrainerClients(user.id),
-      getActiveInvites(user.id),
+      getTrainerCode(user.id),
       getCustomWorkouts(user.id),
     ]);
-    return { clients, invites, workouts };
+    return { clients, trainerCode, workouts };
   }, [user]);
 
   const { data, loading, error, retry } = useFocusAsyncData({
     fetcher,
-    defaultValue: { clients: [], invites: [], workouts: [] } as DashboardData,
+    defaultValue: { clients: [], trainerCode: null, workouts: [] } as DashboardData,
     enabled: !!user,
   });
 
-  const { clients, invites, workouts } = data;
+  const { clients, trainerCode, workouts } = data;
   const displayName = profile?.name || t('home.defaultName');
 
   const getDifficultyColor = (d: string) =>
@@ -115,9 +115,9 @@ export default function TrainerDashboardScreen() {
                 <Text style={styles.statLabel}>{t('dashboard.programs')}</Text>
               </View>
               <View style={[styles.statCard, { borderLeftColor: colors.success }]}>
-                <Ionicons name="mail" size={22} color={colors.success} />
-                <Text style={styles.statValue}>{invites.length}</Text>
-                <Text style={styles.statLabel}>{t('dashboard.pendingInvites')}</Text>
+                <Ionicons name="key" size={22} color={colors.success} />
+                <Text style={[styles.statValue, { fontSize: FontSize.sm, letterSpacing: 2 }]}>{trainerCode ?? '—'}</Text>
+                <Text style={styles.statLabel}>{t('dashboard.myCode')}</Text>
               </View>
             </View>
           )}
@@ -212,22 +212,7 @@ export default function TrainerDashboardScreen() {
                 </View>
               )}
 
-              {/* Pending invites */}
-              {invites.length > 0 && (
-                <>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>{t('dashboard.pendingInvites')}</Text>
-                  </View>
-                  {invites.slice(0, 3).map((inv) => (
-                    <View key={inv.id} style={styles.inviteItem}>
-                      <Text style={styles.inviteCode}>{inv.code}</Text>
-                      <Text style={styles.inviteExpiry}>
-                        {new Date(inv.expiresAt).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  ))}
-                </>
-              )}
+              {/* Trainer code info removed — code is shown in stats card */}
             </>
           )}
 

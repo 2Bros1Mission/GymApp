@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { TrainerInvite, TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress } from '../types';
+import type { TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress } from '../types';
 import type { Tables, TablesUpdate, Json } from '../types/database';
 
 interface ProfileJoin {
@@ -8,66 +8,17 @@ interface ProfileJoin {
 }
 
 /**
- * Generate a random 6-character alphanumeric invite code.
+ * Get the trainer's permanent invite code from their profile.
  */
-function generateCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 to avoid confusion
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-/**
- * Create a new invite code for a trainer. Expires in 7 days.
- */
-export async function createInviteCode(trainerId: string): Promise<{ code?: string; error?: string }> {
-  const code = generateCode();
-
-  const { error } = await supabase
-    .from('trainer_invites')
-    .insert({ trainer_id: trainerId, code });
-
-  if (error) {
-    // Unique constraint collision — extremely rare, retry once
-    if (error.code === '23505') {
-      const retryCode = generateCode();
-      const { error: retryError } = await supabase
-        .from('trainer_invites')
-        .insert({ trainer_id: trainerId, code: retryCode });
-      if (retryError) return { error: retryError.message };
-      return { code: retryCode };
-    }
-    return { error: error.message };
-  }
-
-  return { code };
-}
-
-/**
- * Get the trainer's active (unused, non-expired) invite codes.
- */
-export async function getActiveInvites(trainerId: string): Promise<TrainerInvite[]> {
+export async function getTrainerCode(trainerId: string): Promise<string | null> {
   const { data, error } = await supabase
-    .from('trainer_invites')
-    .select('*')
-    .eq('trainer_id', trainerId)
-    .eq('used', false)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
+    .from('profiles')
+    .select('trainer_code')
+    .eq('id', trainerId)
+    .single();
 
   if (error) throw new Error(error.message);
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    trainerId: row.trainer_id,
-    code: row.code,
-    expiresAt: row.expires_at,
-    used: row.used,
-    usedBy: row.used_by ?? undefined,
-    createdAt: row.created_at,
-  }));
+  return data?.trainer_code ?? null;
 }
 
 /**
