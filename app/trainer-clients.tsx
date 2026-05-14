@@ -298,7 +298,11 @@ export default function TrainerClientsScreen() {
                   {t('trainer.connectedSince')} {formatDate(client.connectedAt)}
                 </Text>
               </View>
-              <Pressable style={styles.removeBtn} onPress={() => handleRemoveClient(client)}>
+              <Pressable
+                style={styles.removeBtn}
+                onPress={() => handleRemoveClient(client)}
+                onStartShouldSetResponder={() => true}
+              >
                 <Ionicons name="close-circle-outline" size={24} color={colors.error} />
               </Pressable>
             </Pressable>

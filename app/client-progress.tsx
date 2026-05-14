@@ -83,7 +83,8 @@ const EMPTY_PROGRESS: ClientProgress = {
 
 export default function ClientProgressScreen() {
   const router = useRouter();
-  const { clientId } = useLocalSearchParams<{ clientId: string }>();
+  const params = useLocalSearchParams<{ clientId: string }>();
+  const clientId = Array.isArray(params.clientId) ? params.clientId[0] : params.clientId;
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
