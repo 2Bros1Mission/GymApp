@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { TrainerInvite, TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel } from '../types';
+import type { TrainerInvite, TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel, ClientProgress } from '../types';
 import type { Tables, TablesUpdate, Json } from '../types/database';
 
 interface ProfileJoin {
@@ -391,4 +391,146 @@ export async function deleteCustomWorkout(workoutId: string): Promise<{ error?: 
 
   if (error) return { error: error.message };
   return {};
+}
+
+// ─── Client Progress Monitoring ─────────────────────────────────────
+
+/**
+ * Get a client's profile info (trainer must be connected).
+ */
+export async function getClientProfile(clientId: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, email, weight, height, goal')
+    .eq('id', clientId)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Get a client's recent workout logs (trainer must be connected via RLS).
+ */
+export async function getClientWorkoutLogs(clientId: string, limit = 20) {
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select('id, workout_name, date, duration_seconds, completed')
+    .eq('user_id', clientId)
+    .eq('completed', true)
+    .order('date', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    workoutName: row.workout_name,
+    date: row.date,
+    durationSeconds: row.duration_seconds,
+    completed: row.completed,
+  }));
+}
+
+/**
+ * Get a client's body metrics history (trainer must be connected via RLS).
+ */
+export async function getClientBodyMetrics(clientId: string, limit = 30) {
+  const { data, error } = await supabase
+    .from('body_metrics')
+    .select('date, weight')
+    .eq('user_id', clientId)
+    .order('date', { ascending: true })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    date: row.date,
+    weight: row.weight,
+  }));
+}
+
+/**
+ * Calculate a client's current workout streak (consecutive days ending today/yesterday).
+ */
+function calculateStreak(workoutDates: string[]): number {
+  if (workoutDates.length === 0) return 0;
+
+  const uniqueDates = [...new Set(workoutDates)].sort().reverse();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const firstDate = new Date(uniqueDates[0]);
+  firstDate.setHours(0, 0, 0, 0);
+
+  // Streak must start from today or yesterday
+  if (firstDate.getTime() !== today.getTime() && firstDate.getTime() !== yesterday.getTime()) {
+    return 0;
+  }
+
+  let streak = 1;
+  for (let i = 1; i < uniqueDates.length; i++) {
+    const prev = new Date(uniqueDates[i - 1]);
+    const curr = new Date(uniqueDates[i]);
+    const diffDays = (prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays === 1) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/**
+ * Get weekly activity (Mon–Sun) for the current week.
+ */
+function getWeeklyActivity(workoutDates: string[]): boolean[] {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+
+  const activity: boolean[] = [false, false, false, false, false, false, false];
+  for (const d of workoutDates) {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    const diff = Math.floor((date.getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff >= 0 && diff < 7) {
+      activity[diff] = true;
+    }
+  }
+  return activity;
+}
+
+/**
+ * Get full client progress data for the detail screen.
+ */
+export async function getClientProgress(clientId: string): Promise<ClientProgress> {
+  const [profile, workouts, metrics] = await Promise.all([
+    getClientProfile(clientId),
+    getClientWorkoutLogs(clientId, 50),
+    getClientBodyMetrics(clientId, 30),
+  ]);
+
+  const workoutDates = workouts.map((w) => w.date);
+  const streak = calculateStreak(workoutDates);
+  const weeklyActivity = getWeeklyActivity(workoutDates);
+
+  return {
+    clientId,
+    clientName: profile.name,
+    clientEmail: profile.email,
+    weight: profile.weight,
+    height: profile.height,
+    goal: profile.goal as ClientProgress['goal'],
+    totalWorkouts: workouts.length,
+    currentStreak: streak,
+    lastWorkoutDate: workouts.length > 0 ? workouts[0].date : null,
+    recentWorkouts: workouts.slice(0, 10),
+    bodyMetrics: metrics,
+    weeklyActivity,
+  };
 }

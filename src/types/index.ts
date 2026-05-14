@@ -101,6 +101,34 @@ export interface TrainerInvite {
   createdAt: string;
 }
 
+export interface ClientWorkoutLog {
+  id: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number | null;
+  completed: boolean;
+}
+
+export interface ClientBodyMetric {
+  date: string;
+  weight: number | null;
+}
+
+export interface ClientProgress {
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  weight: number | null;
+  height: number | null;
+  goal: FitnessGoal | null;
+  totalWorkouts: number;
+  currentStreak: number;
+  lastWorkoutDate: string | null;
+  recentWorkouts: ClientWorkoutLog[];
+  bodyMetrics: ClientBodyMetric[];
+  weeklyActivity: boolean[]; // Mon–Sun, true = worked out
+}
+
 export interface TrainerClient {
   id: string;
   trainerId: string;

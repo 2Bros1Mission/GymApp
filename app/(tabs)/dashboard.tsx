@@ -156,7 +156,11 @@ export default function TrainerDashboardScreen() {
 
               {clients.length > 0 ? (
                 clients.slice(0, 3).map((c) => (
-                  <View key={c.id} style={styles.clientItem}>
+                  <Pressable
+                    key={c.id}
+                    style={styles.clientItem}
+                    onPress={() => router.push(`/client-progress?clientId=${c.clientId}`)}
+                  >
                     <View style={styles.clientAvatar}>
                       <Text style={styles.clientAvatarText}>
                         {(c.clientName ?? '?').charAt(0).toUpperCase()}
@@ -168,7 +172,8 @@ export default function TrainerDashboardScreen() {
                         {t('trainer.connectedSince')} {new Date(c.connectedAt).toLocaleDateString()}
                       </Text>
                     </View>
-                  </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  </Pressable>
                 ))
               ) : (
                 <View style={styles.emptyCard}>
