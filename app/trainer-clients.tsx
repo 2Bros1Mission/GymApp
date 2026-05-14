@@ -13,11 +13,20 @@ import { useAsyncData } from '../src/hooks/useAsyncData';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
-import { createInviteCode, getActiveInvites, getTrainerClients, removeConnection } from '../src/lib/trainerService';
+import {
+  createInviteCode,
+  getActiveInvites,
+  getTrainerClients,
+  getPendingRequests,
+  removeConnection,
+  approveConnection,
+  rejectConnection,
+} from '../src/lib/trainerService';
 import type { TrainerInvite, TrainerClient } from '../src/types';
 
 interface ClientsData {
   clients: TrainerClient[];
+  pendingRequests: TrainerClient[];
   invites: TrainerInvite[];
 }
 
@@ -50,6 +59,14 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   inviteItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
   inviteCode: { fontSize: FontSize.md, fontWeight: '700', color: colors.primary, letterSpacing: 2 },
   inviteExpiry: { fontSize: FontSize.xs, color: colors.textMuted },
+  pendingCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: colors.warning + '30' },
+  pendingRow: { flexDirection: 'row', alignItems: 'center' },
+  pendingActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm, marginLeft: 56 },
+  approveBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, backgroundColor: colors.success + '15', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
+  approveBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.success },
+  rejectBtn: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, backgroundColor: colors.error + '15', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
+  rejectBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.error },
+  pendingEmpty: { fontSize: FontSize.sm, color: colors.textMuted, textAlign: 'center', paddingVertical: Spacing.md },
 });
 
 export default function TrainerClientsScreen() {
@@ -67,21 +84,22 @@ export default function TrainerClientsScreen() {
   const [generating, setGenerating] = useState(false);
 
   const fetcher = useCallback(async (): Promise<ClientsData> => {
-    if (!user) return { clients: [], invites: [] };
-    const [clients, invites] = await Promise.all([
+    if (!user) return { clients: [], pendingRequests: [], invites: [] };
+    const [clients, pendingRequests, invites] = await Promise.all([
       getTrainerClients(user.id),
+      getPendingRequests(user.id),
       getActiveInvites(user.id),
     ]);
-    return { clients, invites };
+    return { clients, pendingRequests, invites };
   }, [user]);
 
   const { data, loading, error, retry } = useAsyncData({
     fetcher,
-    defaultValue: { clients: [], invites: [] } as ClientsData,
+    defaultValue: { clients: [], pendingRequests: [], invites: [] } as ClientsData,
     enabled: !!user,
   });
 
-  const { clients, invites } = data;
+  const { clients, pendingRequests, invites } = data;
 
   const handleGenerateCode = () => {
     guardAction(async () => {
@@ -104,6 +122,36 @@ export default function TrainerClientsScreen() {
     } catch {
       // Clipboard not available on some platforms
     }
+  };
+
+  const handleApprove = (connection: TrainerClient) => {
+    guardAction(async () => {
+      const result = await approveConnection(connection.id);
+      if (result.error) {
+        Alert.alert(t('common.error'), result.error);
+        return;
+      }
+      retry();
+    });
+  };
+
+  const handleReject = (connection: TrainerClient) => {
+    guardAction(() => {
+      confirmAction(
+        t('trainer.reject'),
+        t('trainer.rejectConfirm'),
+        t('trainer.reject'),
+        t('common.cancel'),
+        async () => {
+          const result = await rejectConnection(connection.id);
+          if (result.error) {
+            Alert.alert(t('common.error'), result.error);
+            return;
+          }
+          retry();
+        },
+      );
+    });
   };
 
   const handleRemoveClient = (connection: TrainerClient) => {
@@ -189,6 +237,41 @@ export default function TrainerClientsScreen() {
               </View>
             ))}
           </>
+        )}
+
+        {/* Pending requests */}
+        <Text style={styles.sectionTitle}>{t('trainer.pendingRequests')}</Text>
+
+        {loading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.md }} />
+        ) : pendingRequests.length > 0 ? (
+          pendingRequests.map((request) => (
+            <View key={request.id} style={styles.pendingCard}>
+              <View style={styles.pendingRow}>
+                <View style={styles.clientAvatar}>
+                  <Text style={styles.clientAvatarText}>
+                    {(request.clientName ?? '?').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.clientInfo}>
+                  <Text style={styles.clientName}>{request.clientName ?? '--'}</Text>
+                  <Text style={styles.clientEmail}>{request.clientEmail ?? ''}</Text>
+                </View>
+              </View>
+              <View style={styles.pendingActions}>
+                <Pressable style={styles.approveBtn} onPress={() => handleApprove(request)}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                  <Text style={styles.approveBtnText}>{t('trainer.approve')}</Text>
+                </Pressable>
+                <Pressable style={styles.rejectBtn} onPress={() => handleReject(request)}>
+                  <Ionicons name="close-circle" size={16} color={colors.error} />
+                  <Text style={styles.rejectBtnText}>{t('trainer.reject')}</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.pendingEmpty}>{t('trainer.noPending')}</Text>
         )}
 
         {/* Connected clients */}

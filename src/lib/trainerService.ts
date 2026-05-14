@@ -72,15 +72,33 @@ export async function getActiveInvites(trainerId: string): Promise<TrainerInvite
 
 /**
  * Client redeems an invite code via the RPC function.
+ * Returns trainer info so the client can confirm the connection.
  */
-export async function redeemInviteCode(code: string): Promise<{ success: boolean; error?: string }> {
+export async function redeemInviteCode(code: string): Promise<{
+  success: boolean;
+  error?: string;
+  connectionId?: string;
+  trainerName?: string;
+  trainerEmail?: string;
+}> {
   const { data, error } = await supabase.rpc('redeem_invite_code', { p_code: code.toUpperCase() });
 
   if (error) return { success: false, error: error.message };
-  const result = data as unknown as { success?: boolean; error?: string } | null;
+  const result = data as unknown as {
+    success?: boolean;
+    error?: string;
+    connection_id?: string;
+    trainer_name?: string;
+    trainer_email?: string;
+  } | null;
   if (!result?.success) return { success: false, error: result?.error ?? 'unknown' };
 
-  return { success: true };
+  return {
+    success: true,
+    connectionId: result.connection_id,
+    trainerName: result.trainer_name,
+    trainerEmail: result.trainer_email,
+  };
 }
 
 /**
@@ -94,6 +112,7 @@ export async function getTrainerClients(trainerId: string): Promise<TrainerClien
       trainer_id,
       client_id,
       status,
+      client_confirmed,
       connected_at,
       client:profiles!trainer_clients_client_id_fkey ( name, email )
     `)
@@ -109,7 +128,8 @@ export async function getTrainerClients(trainerId: string): Promise<TrainerClien
       id: row.id,
       trainerId: row.trainer_id,
       clientId: row.client_id,
-      status: row.status as 'active' | 'removed',
+      status: row.status as TrainerClient['status'],
+      clientConfirmed: row.client_confirmed,
       connectedAt: row.connected_at,
       clientName: client?.name,
       clientEmail: client?.email,
@@ -118,7 +138,44 @@ export async function getTrainerClients(trainerId: string): Promise<TrainerClien
 }
 
 /**
- * Get the client's trainer (if connected).
+ * Get pending connection requests for a trainer (client_confirmed = true).
+ */
+export async function getPendingRequests(trainerId: string): Promise<TrainerClient[]> {
+  const { data, error } = await supabase
+    .from('trainer_clients')
+    .select(`
+      id,
+      trainer_id,
+      client_id,
+      status,
+      client_confirmed,
+      connected_at,
+      client:profiles!trainer_clients_client_id_fkey ( name, email )
+    `)
+    .eq('trainer_id', trainerId)
+    .eq('status', 'pending')
+    .eq('client_confirmed', true)
+    .order('connected_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const client = row.client as unknown as ProfileJoin | null;
+    return {
+      id: row.id,
+      trainerId: row.trainer_id,
+      clientId: row.client_id,
+      status: row.status as TrainerClient['status'],
+      clientConfirmed: row.client_confirmed,
+      connectedAt: row.connected_at,
+      clientName: client?.name,
+      clientEmail: client?.email,
+    };
+  });
+}
+
+/**
+ * Get the client's trainer (active or pending connection).
  */
 export async function getClientTrainer(clientId: string): Promise<TrainerClient | null> {
   const { data, error } = await supabase
@@ -128,11 +185,13 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
       trainer_id,
       client_id,
       status,
+      client_confirmed,
       connected_at,
       trainer:profiles!trainer_clients_trainer_id_fkey ( name, email )
     `)
     .eq('client_id', clientId)
-    .eq('status', 'active')
+    .in('status', ['active', 'pending'])
+    .order('connected_at', { ascending: false })
     .limit(1)
     .single();
 
@@ -144,7 +203,8 @@ export async function getClientTrainer(clientId: string): Promise<TrainerClient 
     id: data.id,
     trainerId: data.trainer_id,
     clientId: data.client_id,
-    status: data.status as 'active' | 'removed',
+    status: data.status as TrainerClient['status'],
+    clientConfirmed: data.client_confirmed,
     connectedAt: data.connected_at,
     trainerName: trainer?.name,
     trainerEmail: trainer?.email,
@@ -162,6 +222,42 @@ export async function removeConnection(connectionId: string): Promise<{ error?: 
 
   if (error) return { error: error.message };
   return {};
+}
+
+/**
+ * Client confirms they want to connect with the trainer.
+ */
+export async function confirmConnection(connectionId: string): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('confirm_connection', { p_connection_id: connectionId });
+
+  if (error) return { success: false, error: error.message };
+  const result = data as unknown as { success?: boolean; error?: string } | null;
+  if (!result?.success) return { success: false, error: result?.error ?? 'unknown' };
+  return { success: true };
+}
+
+/**
+ * Trainer approves a pending (client-confirmed) connection request.
+ */
+export async function approveConnection(connectionId: string): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('approve_connection', { p_connection_id: connectionId });
+
+  if (error) return { success: false, error: error.message };
+  const result = data as unknown as { success?: boolean; error?: string } | null;
+  if (!result?.success) return { success: false, error: result?.error ?? 'unknown' };
+  return { success: true };
+}
+
+/**
+ * Trainer rejects a pending connection request.
+ */
+export async function rejectConnection(connectionId: string): Promise<{ success: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('reject_connection', { p_connection_id: connectionId });
+
+  if (error) return { success: false, error: error.message };
+  const result = data as unknown as { success?: boolean; error?: string } | null;
+  if (!result?.success) return { success: false, error: result?.error ?? 'unknown' };
+  return { success: true };
 }
 
 // ─── Custom Workout CRUD ─────────────────────────────────────────────

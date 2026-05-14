@@ -105,7 +105,8 @@ export interface TrainerClient {
   id: string;
   trainerId: string;
   clientId: string;
-  status: 'active' | 'removed';
+  status: 'pending' | 'active' | 'rejected' | 'removed';
+  clientConfirmed: boolean;
   connectedAt: string;
   // Joined from profiles
   clientName?: string;
