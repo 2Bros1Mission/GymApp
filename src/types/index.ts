@@ -75,6 +75,22 @@ export type FitnessGoal =
 
 export type DifficultyLevel = 'beginner' | 'intermediate' | 'advanced';
 
+export interface CustomWorkout {
+  id: string;
+  creatorId: string;
+  name: string;
+  nameBg: string;
+  description: string;
+  descriptionBg: string;
+  difficulty: DifficultyLevel;
+  durationMinutes: number;
+  muscleGroups: MuscleGroup[];
+  exercises: Exercise[];
+  isPublic: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TrainerInvite {
   id: string;
   trainerId: string;

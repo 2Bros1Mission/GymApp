@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { TrainerInvite, TrainerClient } from '../types';
+import type { TrainerInvite, TrainerClient, CustomWorkout, Exercise, MuscleGroup, DifficultyLevel } from '../types';
 
 /**
  * Generate a random 6-character alphanumeric invite code.
@@ -143,6 +143,136 @@ export async function removeConnection(connectionId: string): Promise<{ error?: 
     .from('trainer_clients')
     .update({ status: 'removed' })
     .eq('id', connectionId);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+// ─── Custom Workout CRUD ─────────────────────────────────────────────
+
+function mapRowToCustomWorkout(row: any): CustomWorkout {
+  return {
+    id: row.id,
+    creatorId: row.creator_id,
+    name: row.name,
+    nameBg: row.name_bg ?? '',
+    description: row.description ?? '',
+    descriptionBg: row.description_bg ?? '',
+    difficulty: row.difficulty as DifficultyLevel,
+    durationMinutes: row.duration_minutes,
+    muscleGroups: (row.muscle_groups ?? []) as MuscleGroup[],
+    exercises: (row.exercises ?? []) as Exercise[],
+    isPublic: row.is_public,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Get all custom workouts created by a trainer.
+ */
+export async function getCustomWorkouts(creatorId: string): Promise<CustomWorkout[]> {
+  const { data } = await supabase
+    .from('custom_workouts')
+    .select('*')
+    .eq('creator_id', creatorId)
+    .order('updated_at', { ascending: false });
+
+  return (data ?? []).map(mapRowToCustomWorkout);
+}
+
+/**
+ * Get a single custom workout by ID.
+ */
+export async function getCustomWorkout(workoutId: string): Promise<CustomWorkout | null> {
+  const { data } = await supabase
+    .from('custom_workouts')
+    .select('*')
+    .eq('id', workoutId)
+    .single();
+
+  if (!data) return null;
+  return mapRowToCustomWorkout(data);
+}
+
+/**
+ * Create a new custom workout.
+ */
+export async function createCustomWorkout(workout: {
+  creatorId: string;
+  name: string;
+  nameBg: string;
+  description: string;
+  descriptionBg: string;
+  difficulty: DifficultyLevel;
+  durationMinutes: number;
+  muscleGroups: MuscleGroup[];
+  exercises: Exercise[];
+  isPublic: boolean;
+}): Promise<{ id?: string; error?: string }> {
+  const { data, error } = await supabase
+    .from('custom_workouts')
+    .insert({
+      creator_id: workout.creatorId,
+      name: workout.name,
+      name_bg: workout.nameBg,
+      description: workout.description,
+      description_bg: workout.descriptionBg,
+      difficulty: workout.difficulty,
+      duration_minutes: workout.durationMinutes,
+      muscle_groups: workout.muscleGroups,
+      exercises: workout.exercises,
+      is_public: workout.isPublic,
+    })
+    .select('id')
+    .single();
+
+  if (error) return { error: error.message };
+  return { id: data?.id };
+}
+
+/**
+ * Update an existing custom workout.
+ */
+export async function updateCustomWorkout(workoutId: string, updates: {
+  name?: string;
+  nameBg?: string;
+  description?: string;
+  descriptionBg?: string;
+  difficulty?: DifficultyLevel;
+  durationMinutes?: number;
+  muscleGroups?: MuscleGroup[];
+  exercises?: Exercise[];
+  isPublic?: boolean;
+}): Promise<{ error?: string }> {
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (updates.name !== undefined) row.name = updates.name;
+  if (updates.nameBg !== undefined) row.name_bg = updates.nameBg;
+  if (updates.description !== undefined) row.description = updates.description;
+  if (updates.descriptionBg !== undefined) row.description_bg = updates.descriptionBg;
+  if (updates.difficulty !== undefined) row.difficulty = updates.difficulty;
+  if (updates.durationMinutes !== undefined) row.duration_minutes = updates.durationMinutes;
+  if (updates.muscleGroups !== undefined) row.muscle_groups = updates.muscleGroups;
+  if (updates.exercises !== undefined) row.exercises = updates.exercises;
+  if (updates.isPublic !== undefined) row.is_public = updates.isPublic;
+
+  const { error } = await supabase
+    .from('custom_workouts')
+    .update(row)
+    .eq('id', workoutId);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+/**
+ * Delete a custom workout.
+ */
+export async function deleteCustomWorkout(workoutId: string): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from('custom_workouts')
+    .delete()
+    .eq('id', workoutId);
 
   if (error) return { error: error.message };
   return {};
