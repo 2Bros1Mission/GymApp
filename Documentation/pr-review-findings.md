@@ -1,6 +1,4 @@
-# PR Review Findings (PRs #96–#102, #105, #107)
-
-Reviewed 2026-05-14. Summary of security flaws, missing features, and code quality issues.
+# PR Review Findings
 
 ---
 
@@ -141,12 +139,6 @@ All CI commands have "ignore errors" flags (`|| true`, `2>/dev/null`). If someth
 
 ---
 
-## PR #100 — chore: trigger migration workflow
-
-**Status:** LGTM. Single comment line added to trigger CI. No functional change.
-
----
-
 ## PR #101 — fix: mark existing migrations as applied before pushing
 
 **Status:** Merged. ~~Minor concern only.~~ **RESOLVED by PR #110** (root cause fixed, this workaround is no longer exercised).
@@ -160,12 +152,6 @@ All CI commands have "ignore errors" flags (`|| true`, `2>/dev/null`). If someth
 **Issue 1 (Low): Swallowed errors**
 The "mark as applied" command silently ignores failures. If your login token expires, the step appears to succeed but actually didn't — like a smoke detector with dead batteries that shows a green light anyway.
 **Fix:** Print a warning message when the command fails instead of hiding it completely.
-
----
-
-## PR #102 — chore: trigger migration workflow v2
-
-**Status:** LGTM. Comment text change to retrigger CI. No functional change.
 
 ---
 
