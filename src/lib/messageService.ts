@@ -148,15 +148,10 @@ export async function sendMessage(conversationId: string, content: string): Prom
 }
 
 /**
- * Mark all unread messages in a conversation as read (messages not sent by me).
+ * Mark all unread messages in a conversation as read via RPC.
  */
-export async function markMessagesRead(conversationId: string, userId: string): Promise<void> {
-  await supabase
-    .from('messages')
-    .update({ read_at: new Date().toISOString() })
-    .eq('conversation_id', conversationId)
-    .neq('sender_id', userId)
-    .is('read_at', null);
+export async function markMessagesRead(conversationId: string): Promise<void> {
+  await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId });
 }
 
 /**

@@ -74,20 +74,7 @@ create policy "Participants can send messages"
     )
   );
 
--- Recipients can mark messages as read
-create policy "Recipients can update read_at"
-  on public.messages for update
-  using (
-    sender_id != auth.uid()
-    and exists (
-      select 1 from public.conversations c
-      where c.id = messages.conversation_id
-        and (c.trainer_id = auth.uid() or c.client_id = auth.uid())
-    )
-  )
-  with check (
-    sender_id != auth.uid()
-  );
+-- No UPDATE policy on messages — marking as read is done via RPC only
 
 -- 3. Indexes for performance
 create index if not exists idx_messages_conversation_created
@@ -109,6 +96,7 @@ create or replace function public.send_message(
   p_content text
 ) returns json
 language plpgsql security definer
+set search_path = public
 as $$
 declare
   v_sender_id uuid := auth.uid();
@@ -153,6 +141,7 @@ create or replace function public.get_or_create_conversation(
   p_other_user_id uuid
 ) returns json
 language plpgsql security definer
+set search_path = public
 as $$
 declare
   v_caller_id uuid := auth.uid();
@@ -207,5 +196,20 @@ begin
 end;
 $$;
 
--- 6. Enable Realtime for messages table
+-- 6. RPC: mark_messages_read — only updates read_at, nothing else
+create or replace function public.mark_messages_read(p_conversation_id uuid)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  update public.messages
+  set read_at = now()
+  where conversation_id = p_conversation_id
+    and sender_id != auth.uid()
+    and read_at is null;
+end;
+$$;
+
+-- 7. Enable Realtime for messages table
 alter publication supabase_realtime add table public.messages;

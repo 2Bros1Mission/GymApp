@@ -692,6 +692,7 @@ export type Database = {
         Returns: string
       }
       send_message: { Args: { p_conversation_id: string; p_content: string }; Returns: Json }
+      mark_messages_read: { Args: { p_conversation_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

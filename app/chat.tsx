@@ -192,7 +192,7 @@ export default function ChatScreen() {
       setMessages(msgs);
 
       // Mark messages as read
-      await markMessagesRead(conversationId, user.id);
+      await markMessagesRead(conversationId);
 
       // Get conversation info for the header
       const { data: conv } = await supabase
@@ -237,7 +237,7 @@ export default function ChatScreen() {
 
       // Mark as read if the message is from the other person
       if (newMsg.senderId !== user.id) {
-        markMessagesRead(conversationId, user.id);
+        markMessagesRead(conversationId);
       }
     });
 
