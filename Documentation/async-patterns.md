@@ -2,7 +2,7 @@
 
 ## Overview
 
-GymApp handles asynchronous data with custom hooks that manage loading states, error handling, and race condition prevention. There are no real-time subscriptions (Supabase Realtime is not used) — data freshness relies on refetching when screens gain focus.
+GymApp handles asynchronous data with custom hooks that manage loading states, error handling, and race condition prevention. Most data freshness relies on refetching when screens gain focus. The one exception is **in-app messaging**, which uses Supabase Realtime WebSocket subscriptions for instant message delivery.
 
 ---
 
@@ -194,14 +194,78 @@ guardAction(() => saveWorkoutLog(params));
 
 ---
 
-## No Real-Time Subscriptions
+## Realtime Subscriptions (Messaging)
 
-GymApp does **not** use Supabase Realtime (WebSocket subscriptions). All data is fetched on-demand:
+Source: `src/lib/messageService.ts`
+
+### Architecture
+
+The **chat feature** uses Supabase Realtime (WebSocket subscriptions) for instant message delivery. This is the only feature using Realtime — all other data is fetched on-demand.
+
+### Subscription Pattern
+
+```typescript
+function subscribeToMessages(
+  conversationId: string,
+  onNewMessage: (message: Message) => void,
+): RealtimeChannel
+```
+
+**Implementation:** Subscribes to `postgres_changes` (INSERT events) on the `messages` table, filtered by `conversation_id`. Returns the channel for cleanup.
+
+### Realtime Flow
+
+```mermaid
+sequenceDiagram
+    participant S as Chat Screen
+    participant MS as messageService
+    participant RT as Supabase Realtime
+    participant DB as PostgreSQL
+
+    S->>MS: subscribeToMessages(conversationId, handler)
+    MS->>RT: channel.on('postgres_changes', {event: INSERT, filter})
+    RT-->>S: Channel subscribed (waiting)
+
+    Note over DB: Other user sends message via send_message RPC
+    DB->>RT: New INSERT event on messages table
+    RT-->>MS: payload.new (message row)
+    MS-->>S: onNewMessage(mapped Message)
+    S->>S: Prepend message to state
+```
+
+### Lifecycle Management
+
+The chat screen subscribes on mount and unsubscribes on unmount:
+
+```typescript
+useEffect(() => {
+  const channel = subscribeToMessages(conversationId, (msg) => {
+    setMessages(prev => [msg, ...prev]);
+  });
+
+  return () => { supabase.removeChannel(channel); };
+}, [conversationId]);
+```
+
+### When Realtime Is Used vs. On-Demand Fetch
+
+| Feature | Pattern | Reason |
+|---------|---------|--------|
+| Chat messages | Realtime subscription | Instant delivery expected |
+| Conversation list | `useFocusAsyncData` | Acceptable to refresh on focus |
+| Workout history | `useFocusAsyncData` | Not time-critical |
+| Client progress | `useFocusAsyncData` | Not time-critical |
+| Goals/suggestions | `useFocusAsyncData` | Not time-critical |
+| Trainer feedback | `useFocusAsyncData` | Not time-critical |
+
+---
+
+## On-Demand Data Fetching
+
+For all features except chat, GymApp fetches data on-demand:
 
 - **On mount:** via `useAsyncData`
 - **On focus:** via `useFocusAsyncData`
 - **On user action:** explicit refetch after mutations (e.g., refresh client list after approving a connection)
 
-This simplifies the architecture — no subscription management, no connection handling, no conflict resolution. The trade-off is that data is only as fresh as the last screen focus event.
-
-**Potential future use:** If the app adds real-time features (chat, live workout sharing, instant notifications of trainer feedback), Supabase Realtime channels would be the natural addition.
+This simplifies the architecture for the majority of screens — no subscription management, no connection handling, no conflict resolution. The trade-off is that data is only as fresh as the last screen focus event.

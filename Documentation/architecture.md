@@ -2,7 +2,7 @@
 
 ## Overview
 
-GymApp is a bilingual (Bulgarian/English) mobile fitness application that connects personal trainers with their clients. The app tracks workouts, logs sets/reps/weights, monitors streaks, and provides progress analytics.
+GymApp is a bilingual (Bulgarian/English) mobile fitness application that connects personal trainers with their clients. The app tracks workouts, logs sets/reps/weights, monitors streaks, provides progress analytics, supports trainer-client messaging, goal tracking, and workout assignments.
 
 **Trainer Model:** Hybrid — trainers can manage individual clients (1-to-1 personal coaching) AND publish programs that any user can follow (1-to-many public content).
 
@@ -14,7 +14,7 @@ GymApp is a bilingual (Bulgarian/English) mobile fitness application that connec
 | Platform SDK | Expo | SDK 54 |
 | Router | expo-router | v6 |
 | Language | TypeScript | 5.9 (strict) |
-| Backend | Supabase | Auth + PostgreSQL |
+| Backend | Supabase | Auth + PostgreSQL + Realtime |
 | Security | Row Level Security | Enforced on all tables |
 | Icons | @expo/vector-icons | Ionicons |
 | State | React Context | + local component state |
@@ -37,6 +37,7 @@ flowchart TB
         Auth[Auth Service<br/>Email/Password OIDC]
         DB[(PostgreSQL<br/>+ RLS Policies)]
         RPC[RPC Functions<br/>Atomic Transactions]
+        RT[Realtime<br/>WebSocket Subscriptions]
     end
 
     Expo[Expo Push Service<br/>Local Notifications]
@@ -51,10 +52,12 @@ flowchart TB
     Mobile --> Auth
     Mobile --> DB
     Mobile --> RPC
+    Mobile --> RT
     Mobile --> Expo
     Web --> Auth
     Web --> DB
     Web --> RPC
+    Web --> RT
 
     GHA -->|deploy| Vercel
     Vercel -->|serves| Web
@@ -67,7 +70,7 @@ flowchart TB
     subgraph Presentation["Presentation Layer (app/)"]
         AuthScreens["(auth) group<br/>welcome, login, signup"]
         TabScreens["(tabs) group<br/>home, workouts, progress, profile"]
-        Modals["Modal screens<br/>workout-builder, active-workout,<br/>trainer-clients, client-progress"]
+        Modals["Modal screens<br/>workout-builder, active-workout,<br/>trainer-clients, client-progress,<br/>assign-workout, goals, suggest-goal,<br/>chat, conversations, workout-detail,<br/>my-workouts"]
     end
 
     subgraph State["State Layer (src/contexts/)"]
@@ -79,7 +82,10 @@ flowchart TB
 
     subgraph Services["Service Layer (src/lib/)"]
         WS[workoutService<br/>logs, stats, body metrics]
-        TS[trainerService<br/>connections, custom workouts,<br/>client progress]
+        TS[trainerService<br/>connections, custom workouts,<br/>client progress, assignments]
+        FS[feedbackService<br/>workout feedback, detail view]
+        GS[goalService<br/>client goals, trainer suggestions]
+        MS[messageService<br/>conversations, messages, realtime]
         NS[notificationService<br/>daily reminders, prefs]
     end
 
@@ -142,11 +148,32 @@ sequenceDiagram
     SVC-->>S: { error: null, workoutLogId }
 ```
 
+### Realtime Flow (Messaging)
+
+```mermaid
+sequenceDiagram
+    participant S as Chat Screen
+    participant MS as messageService
+    participant C as Supabase Client
+    participant RT as Realtime Channel
+    participant DB as PostgreSQL
+
+    S->>MS: subscribeToMessages(conversationId, onNewMessage)
+    MS->>C: channel('messages:id').on('postgres_changes', ...)
+    C->>RT: Subscribe to INSERT events on messages table
+    RT-->>S: (waiting for events)
+
+    Note over DB: Another user sends a message via RPC
+    DB->>RT: New row inserted in messages
+    RT-->>MS: payload.new (message row)
+    MS-->>S: onNewMessage(mapped message)
+```
+
 ## External Dependencies
 
 | Package | Purpose | Runtime? |
 |---------|---------|----------|
-| `@supabase/supabase-js` | Auth, database queries, RPC calls | Yes |
+| `@supabase/supabase-js` | Auth, database queries, RPC calls, Realtime | Yes |
 | `expo-notifications` | Local daily workout reminders | Yes |
 | `expo-secure-store` | Secure token persistence (native) | Yes |
 | `expo-device` | Physical device check for notifications | Yes |
@@ -178,25 +205,50 @@ GymApp/
 │   │   ├── progress.tsx          # Progress/analytics
 │   │   └── profile.tsx           # User profile
 │   ├── workout/[id].tsx          # Workout detail (pre-start)
-│   └── active-workout/[id].tsx   # Active workout session
+│   ├── active-workout/[id].tsx   # Active workout session
+│   ├── assign-workout.tsx        # Trainer assigns workouts to clients
+│   ├── chat.tsx                  # Chat screen with pagination + realtime
+│   ├── client-progress.tsx       # Trainer views client progress
+│   ├── conversations.tsx         # Conversation list
+│   ├── edit-profile.tsx          # Edit profile screen
+│   ├── goals.tsx                 # Client goal setting/tracking
+│   ├── my-trainer.tsx            # Client views their trainer
+│   ├── my-workouts.tsx           # User's custom workouts
+│   ├── suggest-goal.tsx          # Trainer suggests goals to clients
+│   ├── trainer-clients.tsx       # Trainer client management
+│   ├── workout-builder.tsx       # Custom workout creator
+│   └── workout-detail.tsx        # Workout detail with trainer feedback
 ├── src/
 │   ├── constants/
 │   │   ├── theme.ts              # Design system tokens
 │   │   └── i18n.ts               # Translation strings + t() function
 │   ├── contexts/
-│   │   └── AuthContext.tsx        # Global auth state provider
+│   │   ├── AuthContext.tsx        # Global auth state provider
+│   │   ├── LanguageContext.tsx    # Reactive i18n provider
+│   │   ├── NetworkContext.tsx     # Connectivity monitoring
+│   │   └── ThemeContext.tsx       # Dark/light mode
 │   ├── lib/
 │   │   ├── supabase.ts           # Supabase client initialization
-│   │   └── workoutService.ts     # Data access functions
+│   │   ├── workoutService.ts     # Workout data access functions
+│   │   ├── trainerService.ts     # Trainer connections, custom workouts, assignments
+│   │   ├── feedbackService.ts    # Workout feedback + detail view
+│   │   ├── goalService.ts        # Client goals + trainer suggestions
+│   │   ├── messageService.ts     # In-app messaging + realtime
+│   │   └── notificationService.ts # Local notification management
+│   ├── hooks/
+│   │   ├── useAsyncData.ts       # Generic data fetching hook
+│   │   ├── useFocusAsyncData.ts  # Refetch on screen focus
+│   │   └── useOfflineGuard.ts    # Offline action prevention
+│   ├── components/               # Reusable UI components
 │   ├── data/
 │   │   └── workouts.ts           # Sample workout data
 │   └── types/
-│       └── index.ts              # Shared TypeScript types
+│       ├── index.ts              # Shared TypeScript types
+│       └── database.ts           # Generated Supabase types
 ├── supabase/
-│   └── schema.sql                # Database schema (source of truth)
+│   └── migrations/               # Timestamped SQL migration files
 ├── Documentation/                # App documentation
 ├── docs/plans/                   # Implementation plans
-├── ROADMAP.md                    # Product roadmap
 ├── app.json                      # Expo configuration
 ├── package.json                  # Dependencies
 └── tsconfig.json                 # TypeScript configuration
@@ -221,10 +273,10 @@ The root `_layout.tsx` implements an auth guard using `useSegments()` and `useRo
 
 ```
 User opens app
-  → loading? → Show spinner
-  → No session + not in (auth)? → Redirect to /(auth)/welcome
-  → Has session + in (auth)? → Redirect to /(tabs)
-  → Otherwise → Render current route
+  -> loading? -> Show spinner
+  -> No session + not in (auth)? -> Redirect to /(auth)/welcome
+  -> Has session + in (auth)? -> Redirect to /(tabs)
+  -> Otherwise -> Render current route
 ```
 
 ### Tab Bar
@@ -274,6 +326,7 @@ interface Profile {
   email: string;
   role: 'client' | 'trainer';
   language: 'bg' | 'en';
+  trainer_code: string | null;  // 6-char permanent code (trainers only)
   weight: number | null;
   height: number | null;
   goal: string | null;
@@ -289,7 +342,7 @@ interface Profile {
 
 ### Role Selection
 
-Users choose their role (client/trainer) during signup. The role is passed via `options.data` in `supabase.auth.signUp()` and the `handle_new_user()` trigger copies it to the `profiles` table.
+Users choose their role (client/trainer) during signup. The role is passed via `options.data` in `supabase.auth.signUp()` and the `handle_new_user()` trigger copies it to the `profiles` table. For trainers, a unique `trainer_code` is also auto-generated.
 
 ## State Management
 
@@ -303,10 +356,10 @@ Users choose their role (client/trainer) during signup. The role is passed via `
 
 ```
 Screen mounts
-  → useEffect calls service function
-  → Service function queries Supabase
-  → setState with results
-  → UI re-renders
+  -> useEffect calls service function
+  -> Service function queries Supabase
+  -> setState with results
+  -> UI re-renders
 ```
 
 ## Data Access Layer
@@ -317,26 +370,18 @@ All database operations go through service files in `src/lib/`:
 
 | Function | Purpose |
 |----------|---------|
-| `saveWorkoutLog()` | Save completed workout with exercises and sets |
+| `saveWorkoutLog()` | Save completed workout with exercises and sets (via RPC) |
 | `getWorkoutHistory()` | Fetch user's completed workouts |
 | `getWorkoutStats()` | Calculate streak, weekly count, total |
 | `getExerciseHistory()` | Get history for a specific exercise |
 | `saveBodyMetric()` | Upsert daily body weight |
 | `getBodyMetrics()` | Fetch weight history |
 
-### `supabase.ts`
-
-Initializes the Supabase client with:
-- Project URL + anon key from environment variables
-- Custom `ExpoSecureStoreAdapter` for token storage
-- **Dev proxy fallback:** If env vars are missing, uses a local proxy URL for development without Supabase credentials
-
 ### `trainerService.ts`
 
 | Function | Purpose |
 |----------|---------|
-| `createInviteCode()` | Generate 6-char invite code for client onboarding |
-| `getActiveInvites()` | List unused, non-expired invite codes |
+| `getTrainerCode()` | Get trainer's permanent invite code from profile |
 | `redeemInviteCode()` | Client redeems code, creates pending connection |
 | `getTrainerClients()` | Get trainer's active connected clients |
 | `getPendingRequests()` | Get pending (client-confirmed) connection requests |
@@ -345,7 +390,7 @@ Initializes the Supabase client with:
 | `confirmConnection()` | Client confirms connection via RPC |
 | `approveConnection()` | Trainer approves pending connection via RPC |
 | `rejectConnection()` | Trainer rejects pending connection via RPC |
-| `getCustomWorkouts()` | List trainer's custom workout templates |
+| `getCustomWorkouts()` | List custom workout templates |
 | `getCustomWorkout()` | Get single custom workout by ID |
 | `createCustomWorkout()` | Create new custom workout |
 | `updateCustomWorkout()` | Update existing custom workout fields |
@@ -354,6 +399,49 @@ Initializes the Supabase client with:
 | `getClientWorkoutLogs()` | Get client's workout history (trainer access) |
 | `getClientBodyMetrics()` | Get client's body metrics (trainer access) |
 | `getClientProgress()` | Full aggregated client progress data |
+| `getRecentClientActivity()` | Recent workout activity across all clients |
+| `assignWorkout()` | Assign a custom workout to a client |
+| `unassignWorkout()` | Remove a workout assignment |
+| `getTrainerAssignments()` | Get assignments created by a trainer |
+| `getClientAssignments()` | Get assignments for a client |
+| `completeAssignment()` | Mark an assignment as completed |
+
+### `feedbackService.ts`
+
+| Function | Purpose |
+|----------|---------|
+| `getWorkoutDetail()` | Full workout log with exercises, sets, and feedback |
+| `getWorkoutFeedback()` | Get all feedback for a workout log |
+| `addWorkoutFeedback()` | Trainer adds feedback to a workout log |
+
+### `goalService.ts`
+
+| Function | Purpose |
+|----------|---------|
+| `getClientGoals()` | Get all goals for a client |
+| `createGoal()` | Client creates a new goal |
+| `updateGoal()` | Update goal fields |
+| `deleteGoal()` | Delete a goal |
+| `completeGoal()` | Mark goal as completed |
+| `getPendingSuggestions()` | Get pending trainer suggestions for a client |
+| `respondToSuggestion()` | Client accepts/adjusts/rejects a suggestion |
+| `getClientGoalsForTrainer()` | Trainer views client's active goals |
+| `suggestGoal()` | Trainer suggests a new goal |
+| `suggestAdjustment()` | Trainer suggests adjustment to existing goal |
+| `withdrawSuggestion()` | Trainer withdraws a pending suggestion |
+| `refreshGoalProgress()` | Auto-update current values from workout/weight data |
+
+### `messageService.ts`
+
+| Function | Purpose |
+|----------|---------|
+| `getOrCreateConversation()` | Find or create a conversation with another user (via RPC) |
+| `getConversations()` | Get all conversations with last message + unread count (via RPC) |
+| `getTotalUnreadCount()` | Get total unread messages across all conversations |
+| `getMessages()` | Get messages for a conversation (paginated) |
+| `sendMessage()` | Send a message via RPC |
+| `markMessagesRead()` | Mark all unread messages as read via RPC |
+| `subscribeToMessages()` | Subscribe to realtime new messages via Supabase Realtime |
 
 ### `notificationService.ts`
 
@@ -367,6 +455,71 @@ Initializes the Supabase client with:
 | `toggleNotifications()` | Enable/disable with permission handling |
 | `updateReminderTime()` | Reschedule at new time |
 | `addNotificationResponseListener()` | Handle notification taps |
+
+### `supabase.ts`
+
+Initializes the Supabase client with:
+- Project URL + anon key from environment variables
+- Custom `ExpoSecureStoreAdapter` for token storage
+- **Dev proxy fallback:** If env vars are missing, uses a local proxy URL for development without Supabase credentials
+
+## Key Screens
+
+### Home (`(tabs)/index.tsx`)
+
+Greeting, today's workout card, quick stats (streak/weekly/total), weekly goal progress bar.
+
+### Workouts (`(tabs)/workouts.tsx`)
+
+List of available workouts from sample data. Each card shows name, duration, difficulty, exercise count.
+
+### Active Workout (`active-workout/[id].tsx`)
+
+Real-time workout session. Timer, exercise list with sets to complete, weight/reps input per set, completion tracking. Gesture navigation disabled to prevent accidental exits.
+
+### Progress (`(tabs)/progress.tsx`)
+
+Body metrics chart (weight over time), workout history list, exercise-specific history.
+
+### Profile (`(tabs)/profile.tsx`)
+
+User info display, language toggle, logout button, notification settings.
+
+### My Workouts (`my-workouts.tsx`)
+
+User's custom workouts with create/edit/delete capability.
+
+### Workout Detail (`workout-detail.tsx`)
+
+Detailed view of a completed workout log showing all exercises, sets, and trainer feedback.
+
+### Assign Workout (`assign-workout.tsx`)
+
+Trainer selects a custom workout and assigns it to a connected client with optional due date and notes.
+
+### Goals (`goals.tsx`)
+
+Client goal setting and tracking. Shows active goals with progress, pending trainer suggestions, and completed goals.
+
+### Suggest Goal (`suggest-goal.tsx`)
+
+Trainer suggests new goals or adjustments to a client's existing goals.
+
+### Conversations (`conversations.tsx`)
+
+List of all conversations with last message preview and unread count badge.
+
+### Chat (`chat.tsx`)
+
+Chat screen with message pagination (load older messages) and real-time delivery via Supabase Realtime subscriptions.
+
+### Trainer Clients (`trainer-clients.tsx`)
+
+Trainer's dashboard for managing connected clients. Shows active clients, pending requests, and recent activity.
+
+### Client Progress (`client-progress.tsx`)
+
+Trainer views detailed client progress: workout history, body metrics chart, streak, weekly activity.
 
 ## Design System
 
@@ -415,11 +568,7 @@ Custom lightweight system (no i18n library).
 - **Language source:** `profile.language` from database
 - **Pattern:** `t('home.greeting')` returns the translated string
 - **Fallback:** Bulgarian if key not found in current language
-
-### Known Issues (see GitHub issues #1, #2)
-
-- Language selection is not reactive (requires app restart)
-- Some strings are hardcoded in Bulgarian, bypassing the i18n system
+- **Reactivity:** Language changes are reactive via `LanguageContext` (no app restart needed)
 
 ## User Roles
 
@@ -428,72 +577,21 @@ Custom lightweight system (no i18n library).
 - Default role on signup
 - Browses sample workouts, logs completions
 - Tracks body metrics and progress
-- Can connect to a trainer via invite code (planned)
-- Receives workout assignments (planned)
+- Connects to a trainer via permanent invite code
+- Receives workout assignments from trainer
+- Sets personal goals with progress tracking
+- Receives and responds to trainer goal suggestions
+- Messages trainer via in-app chat
+- Views trainer feedback on completed workouts
 
 ### Trainer
 
-- Selected during signup
-- Creates custom workout templates (planned)
-- Manages connected clients (planned)
-- Assigns workouts, monitors progress (planned)
-- Publishes public programs (planned)
-- Provides feedback on completed workouts (planned)
-
-## Key Screens
-
-### Home (`(tabs)/index.tsx`)
-
-Greeting, today's workout card, quick stats (streak/weekly/total), weekly goal progress bar.
-
-### Workouts (`(tabs)/workouts.tsx`)
-
-List of available workouts from sample data. Each card shows name, duration, difficulty, exercise count.
-
-### Active Workout (`active-workout/[id].tsx`)
-
-Real-time workout session. Timer, exercise list with sets to complete, weight/reps input per set, completion tracking. Gesture navigation disabled to prevent accidental exits.
-
-### Progress (`(tabs)/progress.tsx`)
-
-Body metrics chart (weight over time), workout history list, exercise-specific history.
-
-### Profile (`(tabs)/profile.tsx`)
-
-User info display, language toggle, logout button. Edit profile is a placeholder (issue #12).
-
-## Planned Architecture (Phase 3: Trainer Core)
-
-### Conditional Route Groups
-
-```
-app/
-├── (tabs)/              # Client tab bar
-├── (trainer-tabs)/      # Trainer tab bar (new)
-│   ├── index.tsx        # Trainer Dashboard
-│   ├── clients.tsx      # Client list
-│   ├── programs.tsx     # Workout programs
-│   └── profile.tsx      # Shared profile
-└── trainer/             # Trainer detail screens
-    ├── client/[id].tsx
-    ├── workout-builder.tsx
-    ├── assign-workout.tsx
-    └── invite.tsx
-```
-
-### Role-Based Redirect
-
-The root `_layout.tsx` will redirect based on `profile.role`:
-- `role === 'trainer'` → `/(trainer-tabs)`
-- `role === 'client'` → `/(tabs)`
-
-### New Service Layer
-
-`src/lib/trainerService.ts` will handle:
-- Invite code generation and validation
-- Client relationship management
-- Workout template CRUD
-- Assignment operations
-- Feedback and goal management
-
-See `docs/plans/2026-05-13-trainer-core.md` for the full implementation plan.
+- Selected during signup (auto-assigned permanent 6-char invite code)
+- Creates custom workout templates (bilingual)
+- Manages connected clients (approve/reject connections)
+- Assigns workouts to clients with due dates
+- Monitors client progress (workouts, body metrics, streaks)
+- Provides feedback on completed client workouts
+- Suggests goals or goal adjustments to clients
+- Messages clients via in-app chat
+- Publishes public workout programs

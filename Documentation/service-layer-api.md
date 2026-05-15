@@ -148,50 +148,23 @@ Source: `src/lib/trainerService.ts`
 
 ### Connection Management
 
-#### createInviteCode
+#### getTrainerCode
 
-Generates a 6-character alphanumeric invite code (excludes ambiguous characters I/O/0/1). Valid for 7 days.
-
-```typescript
-function createInviteCode(trainerId: string): Promise<{ code?: string; error?: string }>
-```
-
-**Supabase operation:** `.from('trainer_invites').insert({ trainer_id, code })`
-**RLS:** Only trainers can create invites (`profiles.role = 'trainer'`)
-**Error handling:** Returns `{ error }`. On unique constraint collision (code already exists), retries once with a new code.
-
----
-
-#### getActiveInvites
-
-Lists the trainer's unused, non-expired invite codes.
+Gets the trainer's permanent 6-character invite code from their profile.
 
 ```typescript
-function getActiveInvites(trainerId: string): Promise<TrainerInvite[]>
+function getTrainerCode(trainerId: string): Promise<string | null>
 ```
 
-**Returns:**
-```typescript
-interface TrainerInvite {
-  id: string;
-  trainerId: string;
-  code: string;
-  expiresAt: string;
-  used: boolean;
-  usedBy?: string;
-  createdAt: string;
-}
-```
-
-**Supabase operation:** `.from('trainer_invites').select('*').eq('trainer_id', trainerId).eq('used', false).gt('expires_at', now())`
-**RLS:** Trainer reads own invites only
-**Error handling:** Throws Error
+**Supabase operation:** `.from('profiles').select('trainer_code').eq('id', trainerId).single()`
+**RLS:** User reads own profile
+**Error handling:** Throws Error. Returns `null` if no code set.
 
 ---
 
 #### redeemInviteCode
 
-Client redeems an invite code. Creates a pending connection and returns trainer info for the confirmation screen.
+Client redeems a trainer's permanent code. Creates a pending connection and returns trainer info for the confirmation screen.
 
 ```typescript
 function redeemInviteCode(code: string): Promise<{
@@ -199,13 +172,14 @@ function redeemInviteCode(code: string): Promise<{
   error?: string;
   connectionId?: string;
   trainerName?: string;
-  trainerEmail?: string;
 }>
 ```
 
 **Supabase operation:** `supabase.rpc('redeem_invite_code', { p_code: code.toUpperCase() })`
 **RLS:** SECURITY DEFINER — validates caller is a client internally
 **Error cases:** `'only_clients'`, `'invalid_code'`, `'already_connected'`
+
+> **Note:** The response no longer includes `trainerEmail`. The RPC function now looks up `profiles.trainer_code` instead of the deprecated `trainer_invites` table.
 
 ---
 
@@ -268,7 +242,6 @@ interface TrainerClient {
   clientName?: string;
   clientEmail?: string;
   trainerName?: string;   // Populated when queried from client side
-  trainerEmail?: string;  // Populated when queried from client side
 }
 ```
 
@@ -298,7 +271,7 @@ Gets the client's current trainer connection (active, pending, or rejected).
 function getClientTrainer(clientId: string): Promise<TrainerClient | null>
 ```
 
-**Supabase operation:** `.from('trainer_clients').select('..., trainer:profiles!...(name, email)').eq('client_id', clientId).in('status', ['active', 'pending', 'rejected'])`
+**Supabase operation:** `.from('trainer_clients').select('..., trainer:profiles!...(name)').eq('client_id', clientId).in('status', ['active', 'pending', 'rejected'])`
 **Error handling:** Throws Error. Returns `null` if no connection exists.
 
 ---
@@ -320,7 +293,7 @@ function removeConnection(connectionId: string): Promise<{ error?: string }>
 
 #### getCustomWorkouts
 
-Lists all custom workouts created by a trainer, most recently updated first.
+Lists all custom workouts created by a user, most recently updated first.
 
 ```typescript
 function getCustomWorkouts(creatorId: string): Promise<CustomWorkout[]>
@@ -422,7 +395,123 @@ function deleteCustomWorkout(workoutId: string): Promise<{ error?: string }>
 
 ---
 
+### Workout Assignments
+
+#### assignWorkout
+
+Trainer assigns a custom workout to a connected client.
+
+```typescript
+function assignWorkout(params: {
+  trainerId: string;
+  clientId: string;
+  workoutId: string;
+  dueDate?: string;    // ISO date (optional)
+  notes?: string;      // Optional instructions
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Supabase operation:** `.from('workout_assignments').insert({...}).select('id').single()`
+**RLS:** Trainer must have active connection to client
+
+---
+
+#### unassignWorkout
+
+Removes a workout assignment.
+
+```typescript
+function unassignWorkout(assignmentId: string): Promise<{ error?: string }>
+```
+
+**Supabase operation:** `.from('workout_assignments').delete().eq('id', assignmentId)`
+**RLS:** Only the assigning trainer can delete
+
+---
+
+#### getTrainerAssignments
+
+Gets all assignments created by a trainer, optionally filtered by client.
+
+```typescript
+function getTrainerAssignments(trainerId: string, clientId?: string): Promise<WorkoutAssignment[]>
+```
+
+**Returns:**
+```typescript
+interface WorkoutAssignment {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  workoutId: string;
+  assignedAt: string;
+  dueDate: string | null;
+  status: 'pending' | 'completed' | 'skipped';
+  completedAt: string | null;
+  notes: string | null;
+  workoutName?: string;
+  workoutNameBg?: string;
+  clientName?: string;
+  trainerName?: string;
+}
+```
+
+**Supabase operation:** `.from('workout_assignments').select('..., workout:custom_workouts!...(name, name_bg), client:profiles!...(name)').eq('trainer_id', trainerId)`
+**Error handling:** Throws Error
+
+---
+
+#### getClientAssignments
+
+Gets pending assignments for a client.
+
+```typescript
+function getClientAssignments(clientId: string): Promise<WorkoutAssignment[]>
+```
+
+**Supabase operation:** `.eq('client_id', clientId).eq('status', 'pending')`
+**Error handling:** Throws Error
+
+---
+
+#### completeAssignment
+
+Client marks an assignment as completed.
+
+```typescript
+function completeAssignment(assignmentId: string): Promise<{ error?: string }>
+```
+
+**Supabase operation:** `.from('workout_assignments').update({ status: 'completed', completed_at: now() }).eq('id', assignmentId)`
+**RLS:** Only the assigned client can update
+
+---
+
 ### Client Progress Monitoring
+
+#### getRecentClientActivity
+
+Gets recent completed workouts across all of a trainer's connected clients.
+
+```typescript
+function getRecentClientActivity(trainerId: string, limit?: number): Promise<RecentActivity[]>
+```
+
+**Returns:**
+```typescript
+interface RecentActivity {
+  id: string;
+  clientId: string;
+  clientName: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number;
+}
+```
+
+**Default limit:** 30
+
+---
 
 #### getClientProfile
 
@@ -485,6 +574,497 @@ interface ClientProgress {
 ```
 
 **Implementation:** Runs 4 queries in parallel via `Promise.all` for performance.
+
+---
+
+## feedbackService.ts
+
+Source: `src/lib/feedbackService.ts`
+
+### getWorkoutDetail
+
+Gets the full detail view of a workout log including all exercises, their sets, and any trainer feedback.
+
+```typescript
+function getWorkoutDetail(workoutLogId: string): Promise<WorkoutDetail>
+```
+
+**Returns:**
+```typescript
+interface WorkoutDetail {
+  id: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number;
+  completed: boolean;
+  notes: string | null;
+  exercises: WorkoutDetailExercise[];
+  feedback: WorkoutFeedback[];
+}
+
+interface WorkoutDetailExercise {
+  id: string;
+  exerciseName: string;
+  orderIndex: number;
+  sets: WorkoutDetailSet[];
+}
+
+interface WorkoutDetailSet {
+  id: string;
+  setNumber: number;
+  weight: number;
+  reps: number;
+  completed: boolean;
+}
+```
+
+**Implementation:** Fetches workout log, then exercise logs with nested set logs, then feedback. Exercises are ordered by `order_index`, sets by `set_number`.
+
+---
+
+### getWorkoutFeedback
+
+Gets all trainer feedback messages for a specific workout log.
+
+```typescript
+function getWorkoutFeedback(workoutLogId: string): Promise<WorkoutFeedback[]>
+```
+
+**Returns:**
+```typescript
+interface WorkoutFeedback {
+  id: string;
+  workoutLogId: string;
+  trainerId: string;
+  trainerName?: string;
+  message: string;
+  createdAt: string;
+}
+```
+
+**Supabase operation:** `.from('workout_feedback').select('*, trainer:profiles!...(name)').eq('workout_log_id', workoutLogId).order('created_at', { ascending: true })`
+**RLS:** Client can read feedback on their own workouts; trainer can read own feedback
+**Error handling:** Throws Error
+
+---
+
+### addWorkoutFeedback
+
+Trainer adds a feedback message to a client's workout log.
+
+```typescript
+function addWorkoutFeedback(params: {
+  workoutLogId: string;
+  trainerId: string;
+  message: string;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Supabase operation:** `.from('workout_feedback').insert({...}).select('id').single()`
+**RLS:** Trainer must have active connection to the workout's owner
+**Error handling:** Returns `{ error }` on failure
+
+---
+
+## goalService.ts
+
+Source: `src/lib/goalService.ts`
+
+### Client Functions
+
+#### getClientGoals
+
+Gets all goals for a client, ordered by status (active first) then most recently updated.
+
+```typescript
+function getClientGoals(clientId: string): Promise<ClientGoal[]>
+```
+
+**Returns:**
+```typescript
+interface ClientGoal {
+  id: string;
+  clientId: string;
+  goalType: GoalType;  // 'weight_target' | 'lift_target' | 'frequency' | 'custom'
+  title: string;
+  targetValue: number | null;
+  currentValue: number | null;
+  unit: string | null;
+  exerciseName: string | null;
+  deadline: string | null;
+  status: 'active' | 'completed' | 'abandoned';
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+```
+
+**Supabase operation:** `.from('client_goals').select('*').eq('client_id', clientId).order('status').order('updated_at', { ascending: false })`
+**RLS:** Client reads own goals only
+**Error handling:** Throws Error
+
+---
+
+#### createGoal
+
+Client creates a new goal.
+
+```typescript
+function createGoal(params: {
+  clientId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue?: number | null;
+  currentValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Supabase operation:** `.from('client_goals').insert({...}).select('id').single()`
+**RLS:** `client_id = auth.uid()`
+
+---
+
+#### updateGoal
+
+Updates goal fields. Only provided fields are changed; `updated_at` is always set.
+
+```typescript
+function updateGoal(goalId: string, updates: {
+  title?: string;
+  targetValue?: number | null;
+  currentValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+}): Promise<{ error?: string }>
+```
+
+---
+
+#### deleteGoal
+
+Deletes a goal permanently.
+
+```typescript
+function deleteGoal(goalId: string): Promise<{ error?: string }>
+```
+
+---
+
+#### completeGoal
+
+Marks a goal as completed with a timestamp.
+
+```typescript
+function completeGoal(goalId: string): Promise<{ error?: string }>
+```
+
+**Behavior:** Sets `status = 'completed'`, `completed_at = now()`, `updated_at = now()`.
+
+---
+
+#### getPendingSuggestions
+
+Gets all pending trainer suggestions for a client.
+
+```typescript
+function getPendingSuggestions(clientId: string): Promise<GoalSuggestion[]>
+```
+
+**Returns:**
+```typescript
+interface GoalSuggestion {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  targetGoalId: string | null;
+  suggestionType: 'new_goal' | 'adjustment';
+  goalType: GoalType;
+  title: string;
+  targetValue: number | null;
+  unit: string | null;
+  exerciseName: string | null;
+  deadline: string | null;
+  message: string | null;
+  status: 'pending' | 'accepted' | 'adjusted' | 'rejected';
+  clientResponseAt: string | null;
+  createdAt: string;
+  trainerName?: string;
+  targetGoalTitle?: string;
+}
+```
+
+**Supabase operation:** `.from('goal_suggestions').select('*, trainer:profiles!...(name), target_goal:client_goals!...(title)').eq('client_id', clientId).eq('status', 'pending')`
+
+---
+
+#### respondToSuggestion
+
+Client accepts, adjusts, or rejects a trainer's suggestion. If accepted/adjusted, creates or updates the corresponding goal.
+
+```typescript
+function respondToSuggestion(
+  suggestionId: string,
+  response: 'accepted' | 'adjusted' | 'rejected',
+  goalData?: {
+    clientId: string;
+    goalType: GoalType;
+    title: string;
+    targetValue?: number | null;
+    unit?: string | null;
+    exerciseName?: string | null;
+    deadline?: string | null;
+    targetGoalId?: string | null;
+    suggestionType: 'new_goal' | 'adjustment';
+  }
+): Promise<{ error?: string }>
+```
+
+**Behavior:**
+1. Updates the suggestion status and sets `client_response_at`
+2. If accepted/adjusted with `suggestionType = 'new_goal'`: inserts a new `client_goals` row
+3. If accepted/adjusted with `suggestionType = 'adjustment'`: updates the `target_goal_id` goal
+
+---
+
+### Trainer Functions
+
+#### getClientGoalsForTrainer
+
+Trainer views a client's active goals (read-only).
+
+```typescript
+function getClientGoalsForTrainer(clientId: string): Promise<ClientGoal[]>
+```
+
+**RLS:** Trainer must have active connection to the client
+**Note:** Only returns active goals (not completed/abandoned).
+
+---
+
+#### suggestGoal
+
+Trainer suggests a new goal to a client.
+
+```typescript
+function suggestGoal(params: {
+  trainerId: string;
+  clientId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+  message?: string | null;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Supabase operation:** `.from('goal_suggestions').insert({..., suggestion_type: 'new_goal'}).select('id').single()`
+**RLS:** Trainer must have active connection to the client
+
+---
+
+#### suggestAdjustment
+
+Trainer suggests an adjustment to an existing client goal.
+
+```typescript
+function suggestAdjustment(params: {
+  trainerId: string;
+  clientId: string;
+  targetGoalId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+  message?: string | null;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Supabase operation:** `.from('goal_suggestions').insert({..., suggestion_type: 'adjustment'}).select('id').single()`
+
+---
+
+#### withdrawSuggestion
+
+Trainer withdraws a pending suggestion (deletes it).
+
+```typescript
+function withdrawSuggestion(suggestionId: string): Promise<{ error?: string }>
+```
+
+**RLS:** Only the trainer can delete, and only if `status = 'pending'`
+
+---
+
+### Auto-Tracking
+
+#### refreshGoalProgress
+
+Automatically refreshes `currentValue` for frequency and weight_target goals using live data.
+
+```typescript
+function refreshGoalProgress(clientId: string, goals: ClientGoal[]): Promise<ClientGoal[]>
+```
+
+**Behavior:**
+- **Frequency goals:** Queries `workout_logs` for completed workouts this week (Monday-Sunday) and sets `currentValue` to the count
+- **Weight target goals:** Queries latest `body_metrics` entry and sets `currentValue` to the weight
+
+**Note:** Does not persist the updated values — they are computed on read for display purposes.
+
+---
+
+## messageService.ts
+
+Source: `src/lib/messageService.ts`
+
+### getOrCreateConversation
+
+Finds an existing conversation with another user, or creates a new one via RPC.
+
+```typescript
+function getOrCreateConversation(otherUserId: string): Promise<{
+  success: boolean;
+  conversationId?: string;
+  error?: string;
+}>
+```
+
+**Supabase operation:** `supabase.rpc('get_or_create_conversation', { p_other_user_id })`
+**Error cases:** `'user_not_found'`, `'invalid_roles'`, `'no_active_connection'`
+
+---
+
+### getConversations
+
+Gets all conversations for the current user with last message preview and unread count.
+
+```typescript
+function getConversations(userId: string): Promise<Conversation[]>
+```
+
+**Returns:**
+```typescript
+interface Conversation {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  lastMessageAt: string;
+  createdAt: string;
+  otherUserName: string;
+  otherUserEmail: string;
+  lastMessageContent?: string;
+  unreadCount: number;
+}
+```
+
+**Supabase operation:** `supabase.rpc('get_conversations')`
+**Note:** The `otherUserName`/`otherUserEmail` fields are derived client-side from the trainer/client profile data based on the caller's role.
+
+---
+
+### getTotalUnreadCount
+
+Gets the total number of unread messages across all conversations.
+
+```typescript
+function getTotalUnreadCount(userId: string): Promise<number>
+```
+
+**Supabase operation:** `.from('messages').select('*, conversation:conversations!inner(id)', { count: 'exact', head: true })` with filters for the user's conversations and unread messages
+**Returns:** `0` on error (graceful fallback)
+
+---
+
+### getMessages
+
+Gets messages for a conversation, newest first. Supports cursor-based pagination.
+
+```typescript
+function getMessages(conversationId: string, limit?: number, before?: string): Promise<Message[]>
+```
+
+**Parameters:**
+- `conversationId` — The conversation to fetch messages from
+- `limit` — Max messages to return (default: 50)
+- `before` — ISO timestamp cursor for pagination (fetch messages older than this)
+
+**Returns:**
+```typescript
+interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  readAt: string | null;
+  createdAt: string;
+}
+```
+
+**Supabase operation:** `.from('messages').select('...').eq('conversation_id', id).order('created_at', { ascending: false }).limit(limit)`
+**Error handling:** Throws Error
+
+---
+
+### sendMessage
+
+Sends a message in a conversation via the `send_message` RPC function.
+
+```typescript
+function sendMessage(conversationId: string, content: string): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}>
+```
+
+**Supabase operation:** `supabase.rpc('send_message', { p_conversation_id, p_content })`
+**Error cases:** `'conversation_not_found'`, `'empty_message'`, `'message_too_long'`
+
+---
+
+### markMessagesRead
+
+Marks all unread messages in a conversation as read (messages from the other party).
+
+```typescript
+function markMessagesRead(conversationId: string): Promise<void>
+```
+
+**Supabase operation:** `supabase.rpc('mark_messages_read', { p_conversation_id })`
+
+---
+
+### subscribeToMessages
+
+Subscribes to real-time new message inserts in a conversation via Supabase Realtime. Returns the channel for cleanup.
+
+```typescript
+function subscribeToMessages(
+  conversationId: string,
+  onNewMessage: (message: Message) => void,
+): RealtimeChannel
+```
+
+**Supabase operation:** `.channel('messages:id').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'conversation_id=eq.{id}' })`
+
+**Usage:**
+```typescript
+// Subscribe
+const channel = subscribeToMessages(conversationId, (msg) => {
+  setMessages(prev => [msg, ...prev]);
+});
+
+// Cleanup (in useEffect return or on unmount)
+supabase.removeChannel(channel);
+```
 
 ---
 
@@ -570,8 +1150,8 @@ function toggleNotifications(enable: boolean, reminderTitle: string, reminderBod
 
 **Behavior when enabling:**
 1. Requests permission
-2. If denied → saves as disabled, returns `{ enabled: false, permissionDenied: true }`
-3. If granted → schedules reminder at saved time, returns `{ enabled: true }`
+2. If denied -> saves as disabled, returns `{ enabled: false, permissionDenied: true }`
+3. If granted -> schedules reminder at saved time, returns `{ enabled: true }`
 
 **Behavior when disabling:**
 1. Cancels reminder

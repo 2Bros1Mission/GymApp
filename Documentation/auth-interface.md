@@ -31,6 +31,7 @@ interface Profile {
   email: string;                  // Email address
   role: 'client' | 'trainer';    // User role (set during signup, immutable)
   language: 'bg' | 'en';         // UI language preference
+  trainer_code: string | null;    // Permanent 6-char invite code (trainers only)
   weight: number | null;          // Body weight (kg)
   height: number | null;          // Height (cm)
   goal: string | null;            // Fitness goal text
@@ -149,7 +150,7 @@ The `role` field in the `profiles` table determines what data a user can access:
 
 ### How Role Is Set
 
-Role is selected during signup and passed via `options.data` metadata. The `handle_new_user()` database trigger copies it to the `profiles` table. Role is immutable after account creation.
+Role is selected during signup and passed via `options.data` metadata. The `handle_new_user()` database trigger copies it to the `profiles` table. For trainers, the trigger also auto-generates a unique 6-character `trainer_code` (permanent invite code). Role is immutable after account creation.
 
 ## Provider Hierarchy
 
