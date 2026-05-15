@@ -21,6 +21,7 @@ import {
   approveConnection,
   rejectConnection,
 } from '../src/lib/trainerService';
+import { getOrCreateConversation } from '../src/lib/messageService';
 import type { TrainerClient } from '../src/types';
 
 interface ClientsData {
@@ -53,6 +54,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   clientEmail: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
   clientDate: { fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 },
   removeBtn: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs },
+  chatBtn: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs },
   emptyCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md },
   emptyText: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
   inviteItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
@@ -257,6 +259,20 @@ export default function TrainerClientsScreen() {
                   {t('trainer.connectedSince')} {formatDate(client.connectedAt)}
                 </Text>
               </View>
+              <Pressable
+                style={styles.chatBtn}
+                onPress={() => {
+                  guardAction(async () => {
+                    const result = await getOrCreateConversation(client.clientId);
+                    if (result.success && result.conversationId) {
+                      router.push(`/chat?conversationId=${result.conversationId}`);
+                    }
+                  });
+                }}
+                onStartShouldSetResponder={() => true}
+              >
+                <Ionicons name="chatbubble-outline" size={22} color={colors.primary} />
+              </Pressable>
               <Pressable
                 style={styles.removeBtn}
                 onPress={() => handleRemoveClient(client)}
