@@ -180,16 +180,17 @@ begin
     return json_build_object('success', false, 'error', 'no_active_connection');
   end if;
 
-  -- Find existing conversation
-  select id into v_conv_id
-  from public.conversations
-  where trainer_id = v_trainer_id and client_id = v_client_id;
+  -- Find or create conversation (handles concurrent requests safely)
+  insert into public.conversations (trainer_id, client_id)
+  values (v_trainer_id, v_client_id)
+  on conflict (trainer_id, client_id) do nothing
+  returning id into v_conv_id;
 
-  -- Create if not found
+  -- If conflict occurred, fetch the existing one
   if v_conv_id is null then
-    insert into public.conversations (trainer_id, client_id)
-    values (v_trainer_id, v_client_id)
-    returning id into v_conv_id;
+    select id into v_conv_id
+    from public.conversations
+    where trainer_id = v_trainer_id and client_id = v_client_id;
   end if;
 
   return json_build_object('success', true, 'conversation_id', v_conv_id);
