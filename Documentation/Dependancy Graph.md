@@ -1,8 +1,8 @@
 # Dependency Graph
 
-## Current State (Updated 2026-05-14)
+## Current State (Updated 2026-05-15)
 
-Phase 1 (Infrastructure & Quality) and Phase 2 (Deployment Pipeline) are **complete**. Custom domain (#40) is backlogged. Phase 3 (Trainer-Client Workflow) is in progress — #66 (accept/reject flow) is done with follow-up bug fixes tracked in #80-#85.
+Phases 1–3 are **complete**. All trainer-client workflow features (#18, #20, #22, #23, #30, #31, #67) and bug fixes (#75, #78, #80–#85) are merged. Custom domain (#40) remains backlogged. Only Phase 4 (Advanced Features) and Phase 5 (Wellness & Gamification) remain, plus #21 (Public programs).
 
 ## Dependency Chains
 
@@ -10,23 +10,27 @@ Phase 1 (Infrastructure & Quality) and Phase 2 (Deployment Pipeline) are **compl
 Web deployment:
   #38 (Expo export) ✅ → #39 (Vercel deploy) ✅ → #40 (custom domain) 🔜 backlog
 
-Trainer workflow:
-  #66 (accept/reject flow) ✅ → #18 (client list) → #67 (client activity on dashboard)
-  #18 → #23 (client goals)
-  #30 (user custom workouts) → #21 (public programs)
-  #20 (workout assignment) → #22 (feedback/notes)
+Trainer workflow (ALL COMPLETE):
+  #66 (accept/reject flow) ✅ → #18 (client list) ✅ → #67 (client activity dashboard) ✅
+  #18 ✅ → #23 (client goals) ✅
+  #30 (user custom workouts) ✅ → #21 (public programs) 🔜
+  #20 (workout assignment) ✅ → #22 (feedback/notes) ✅
 
 Quality & DX:
   #68 (Supabase types) ✅
   #63 (login test) ✅
-  #38 (Expo export) ✅ → CI workflow ✅
+  #38 (Expo export) ✅ → CI workflow ✅ → #78 (CI env vars) ✅
 
-Bug fixes from #66:
-  #80 (hide trainer email), #81 (permanent trainer code), #82 (fix names showing '?'),
-  #83 (email confirmation), #84 (profile page not loading), #85 (client notification)
+Bug fixes (ALL COMPLETE):
+  #75 (input validation) ✅, #78 (CI secrets) ✅
+  #80 (hide trainer email) ✅, #81 (permanent trainer code) ✅, #82 (fix names '?') ✅,
+  #83 (email confirmation) ✅, #84 (profile page) ✅, #85 (client notification) ✅
 
-Independent (no blockers):
-  #25, #26, #27, #28, #29, #24, #31
+Messaging:
+  #31 (in-app messaging) ✅
+
+Remaining (no blockers):
+  #21 (public programs), #24, #25, #26, #27, #28, #29, #40
 ```
 
 ## Mermaid Diagram
@@ -37,43 +41,43 @@ graph TD
     38[#38 Expo export ✅] --> 39[#39 Vercel deploy ✅]
     39 --> 40[#40 custom domain 🔜]
     38 --> CI[CI workflow ✅]
+    CI --> 78[#78 CI env vars ✅]
 
-    %% Trainer workflow
-    66[#66 accept/reject flow ✅] --> 18[#18 client list + progress]
-    18 --> 67[#67 client activity dashboard]
-    18 --> 23[#23 client goals]
-    30[#30 user custom workouts] --> 21[#21 public programs]
-    20[#20 workout assignment] --> 22[#22 feedback/notes]
+    %% Trainer workflow (all complete)
+    66[#66 accept/reject flow ✅] --> 18[#18 client list ✅]
+    18 --> 67[#67 client activity dashboard ✅]
+    18 --> 23[#23 client goals ✅]
+    30[#30 user custom workouts ✅] --> 21[#21 public programs 🔜]
+    20[#20 workout assignment ✅] --> 22[#22 feedback/notes ✅]
 
-    %% Bug fixes from #66
-    66 --> 80[#80 hide trainer email]
-    66 --> 81[#81 permanent trainer code]
-    66 --> 82[#82 fix names '?']
-    66 --> 83[#83 email confirmation]
-    66 --> 84[#84 profile page]
-    66 --> 85[#85 client notification]
+    %% Messaging
+    31[#31 messaging ✅]
 
-    %% Independent features
+    %% Bug fixes (all complete)
+    66 --> 80[#80 hide trainer email ✅]
+    66 --> 81[#81 permanent trainer code ✅]
+    66 --> 82[#82 fix names '?' ✅]
+    66 --> 83[#83 email confirmation ✅]
+    66 --> 84[#84 profile page ✅]
+    66 --> 85[#85 client notification ✅]
+
+    %% Remaining future features
+    21
+    24[#24 video form checks]
     25[#25 AI suggestions]
     26[#26 nutrition]
     27[#27 sleep/recovery]
     28[#28 challenges]
     29[#29 achievements]
-    24[#24 video form checks]
-    31[#31 messaging]
 
     %% Styling
     classDef done fill:#2d6,stroke:#1a4,color:#fff
     classDef backlog fill:#f90,stroke:#c60,color:#fff
-    classDef core fill:#36f,stroke:#24c,color:#fff
-    classDef bug fill:#e44,stroke:#b22,color:#fff
     classDef future fill:#999,stroke:#666,color:#fff
 
-    class 38,39,CI,66 done
-    class 40 backlog
-    class 18,67,20,22,23,30,21 core
-    class 80,81,82,83,84,85 bug
-    class 25,26,27,28,29,24,31 future
+    class 38,39,CI,78,66,18,67,23,30,20,22,31,80,81,82,83,84,85 done
+    class 40,21 backlog
+    class 24,25,26,27,28,29 future
 ```
 
 ## Closed Issues (already merged)
@@ -97,7 +101,13 @@ The following dependencies are satisfied — no longer blockers:
 | #14 | Push notifications setup | Merged |
 | #16 | Client-trainer schema + linking | Merged |
 | #17 | Trainer dashboard | Merged |
+| #18 | Client list and progress monitoring | Merged |
 | #19 | Custom workout builder | Merged |
+| #20 | Workout assignment (trainer→client) | Merged |
+| #22 | Workout feedback and notes | Merged |
+| #23 | Client goal setting and tracking | Merged |
+| #30 | Users create custom workouts | Merged |
+| #31 | In-app messaging | Merged |
 | #34 | Responsive breakpoint hook | Merged |
 | #35 | Desktop sidebar navigation | Merged |
 | #36 | Responsive layout adjustments | Merged |
@@ -108,63 +118,63 @@ The following dependencies are satisfied — no longer blockers:
 | #64 | Skeleton/loading for workouts | Merged |
 | #65 | Block destructive actions offline | Merged |
 | #66 | Accept/reject trainer-client flow | Merged |
+| #67 | Client workout activity on dashboard | Merged |
 | #68 | Supabase type generation | Merged |
+| #75 | Validate workout set input | Merged |
+| #78 | CI Supabase env vars | Merged |
+| #80 | Hide trainer email | Merged |
+| #81 | Permanent trainer code | Merged |
+| #82 | Fix names showing '?' | Merged |
+| #83 | Email confirmation on signup | Merged |
+| #84 | Profile page not loading | Merged |
+| #85 | Client notification on accept/reject | Merged |
 
 ## Recommended Resolution Order
 
 ### ~~Phase 1 — Infrastructure & Quality~~ ✅ COMPLETE
 
-All items resolved: #38, #68, #63, #64, #65, CI workflow.
+All items resolved: #38, #68, #63, #64, #65, CI workflow, #78.
 
 ### ~~Phase 2 — Deployment Pipeline~~ ✅ COMPLETE
 
 #39 merged. #40 (custom domain) deferred to backlog — no code dependency, just DNS purchase.
 
-### Phase 3 — Trainer-Client Workflow (core value) ← CURRENT
+### ~~Phase 3 — Trainer-Client Workflow~~ ✅ COMPLETE
+
+All items resolved: #18, #20, #22, #23, #30, #31, #67, bug fixes #75, #80–#85.
+
+### Phase 4 — Remaining Features ← CURRENT
 
 | Order | Issue | Rationale |
 |---|---|---|
-| — | #80-#85 — Bug fixes from #66 | Polish existing flow before building on it |
-| 8 | #18 — Client list & progress monitoring | Trainer's primary view |
-| 9 | #67 — Client workout activity on dashboard | Builds on #18, high value |
-| 10 | #20 — Workout assignment trainer→client | Core trainer feature |
-| 11 | #30 — Users create custom workouts | Builder already exists, add user-facing flow |
-| 12 | #21 — Public workout programs | Marketplace, depends on workout content |
-| 13 | #23 — Client goal setting | Leverages #18 progress data |
-| 14 | #22 — Workout feedback/notes | Depends on #20 assignment flow |
-
-### Phase 4 — Advanced Features
-
-| Order | Issue | Rationale |
-|---|---|---|
-| 15 | #31 — In-app messaging | Large scope, all deps already met |
-| 16 | #25 — AI programming suggestions | Independent, medium scope |
-| 17 | #24 — Video form checks | Complex (camera/upload), independent |
+| 1 | #21 — Public workout programs | Only remaining trainer feature; depends on #30 (done) |
+| 2 | #40 — Custom domain | DNS purchase + Vercel config, no code deps |
+| 3 | #25 — AI programming suggestions | Independent, medium scope |
+| 4 | #24 — Video form checks | Complex (camera/upload), independent |
 
 ### Phase 5 — Wellness & Gamification (lowest priority)
 
 | Order | Issue | Rationale |
 |---|---|---|
-| 18 | #26 — Nutrition logging | New domain, no deps |
-| 19 | #27 — Sleep & recovery tracking | New domain, no deps |
-| 20 | #28 — Gamification: challenges | Best after core features exist |
-| 21 | #29 — Gamification: achievements | Best after core features exist |
+| 5 | #26 — Nutrition logging | New domain, no deps |
+| 6 | #27 — Sleep & recovery tracking | New domain, no deps |
+| 7 | #28 — Gamification: challenges | Best after core features exist |
+| 8 | #29 — Gamification: achievements | Best after core features exist |
 
 ## Critical Path
 
-The primary critical path now is the **trainer workflow:**
+All core critical paths are **complete**. The remaining items are independent of each other:
 
 ```
-#80-#85 (bug fixes) → #18 (client list) → #20 (assignment) → #22 (feedback)
+#21 (public programs) — only depends on #30 ✅
+#40 (custom domain) — DNS purchase, no code dep
+#24, #25, #26, #27, #28, #29 — fully independent
 ```
-
-Secondary paths (#30→#21, #18→#67, #18→#23) can be parallelized.
 
 ## Notes
 
-- Phase 1+2 completed 2026-05-14
-- #66 follow-up bugs (#80-#85) should be resolved before starting #18
+- Phases 1–3 completed by 2026-05-15
+- #21 (public programs) is the only remaining feature with a dependency (#30, already done)
 - #40 (custom domain) requires purchasing a domain — no code changes needed
-- #78 (CI Supabase env vars) is a DX improvement, not blocking anything
-- Phases 3-5 can overlap if multiple people are working
-- #24 (video form checks) and #31 (messaging) are the largest scope items remaining
+- All PR review security findings (PRs #97, #98, #105, #107) are documented but not yet fixed — address before shipping to real users
+- Phases 4-5 can be worked in any order since all items are independent
