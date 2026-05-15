@@ -54,6 +54,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   clientEmail: { fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 },
   clientDate: { fontSize: FontSize.xs, color: colors.textMuted, marginTop: 2 },
   removeBtn: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs },
+  chatBtn: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs },
   emptyCard: { backgroundColor: colors.surface, borderRadius: BorderRadius.lg, padding: Spacing.xl, alignItems: 'center', gap: Spacing.md },
   emptyText: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
   inviteItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
@@ -259,7 +260,7 @@ export default function TrainerClientsScreen() {
                 </Text>
               </View>
               <Pressable
-                style={styles.removeBtn}
+                style={styles.chatBtn}
                 onPress={() => {
                   guardAction(async () => {
                     const result = await getOrCreateConversation(client.clientId);
