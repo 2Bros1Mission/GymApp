@@ -678,6 +678,7 @@ export type Database = {
       approve_connection: { Args: { p_connection_id: string }; Returns: Json }
       confirm_connection: { Args: { p_connection_id: string }; Returns: Json }
       get_or_create_conversation: { Args: { p_other_user_id: string }; Returns: Json }
+      get_conversations: { Args: Record<string, never>; Returns: Json }
       redeem_invite_code: { Args: { p_code: string }; Returns: Json }
       reject_connection: { Args: { p_connection_id: string }; Returns: Json }
       save_workout: {

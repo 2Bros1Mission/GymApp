@@ -28,62 +28,38 @@ export async function getOrCreateConversation(otherUserId: string): Promise<{
  * Get all conversations for the current user with last message preview.
  */
 export async function getConversations(userId: string): Promise<Conversation[]> {
-  const { data, error } = await supabase
-    .from('conversations')
-    .select(`
-      id,
-      trainer_id,
-      client_id,
-      last_message_at,
-      created_at,
-      trainer:profiles!conversations_trainer_id_fkey ( name, email ),
-      client:profiles!conversations_client_id_fkey ( name, email )
-    `)
-    .or(`trainer_id.eq.${userId},client_id.eq.${userId}`)
-    .order('last_message_at', { ascending: false });
+  const { data, error } = await supabase.rpc('get_conversations');
 
   if (error) throw new Error(error.message);
 
-  // For each conversation, get the last message and unread count
-  const conversations = await Promise.all(
-    (data ?? []).map(async (row) => {
-      const isTrainer = row.trainer_id === userId;
-      const otherUser = isTrainer
-        ? (row.client as unknown as { name: string; email: string } | null)
-        : (row.trainer as unknown as { name: string; email: string } | null);
+  const rows = data as unknown as Array<{
+    id: string;
+    trainer_id: string;
+    client_id: string;
+    last_message_at: string;
+    created_at: string;
+    trainer_name: string;
+    trainer_email: string;
+    client_name: string;
+    client_email: string;
+    last_message_content: string | null;
+    unread_count: number;
+  }> ?? [];
 
-      // Get last message
-      const { data: lastMsg } = await supabase
-        .from('messages')
-        .select('content')
-        .eq('conversation_id', row.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      // Get unread count (messages sent by the other person that I haven't read)
-      const { count } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('conversation_id', row.id)
-        .neq('sender_id', userId)
-        .is('read_at', null);
-
-      return {
-        id: row.id,
-        trainerId: row.trainer_id,
-        clientId: row.client_id,
-        lastMessageAt: row.last_message_at,
-        createdAt: row.created_at,
-        otherUserName: otherUser?.name,
-        otherUserEmail: otherUser?.email,
-        lastMessageContent: lastMsg?.content ?? undefined,
-        unreadCount: count ?? 0,
-      };
-    }),
-  );
-
-  return conversations;
+  return rows.map((row) => {
+    const isTrainer = row.trainer_id === userId;
+    return {
+      id: row.id,
+      trainerId: row.trainer_id,
+      clientId: row.client_id,
+      lastMessageAt: row.last_message_at,
+      createdAt: row.created_at,
+      otherUserName: isTrainer ? row.client_name : row.trainer_name,
+      otherUserEmail: isTrainer ? row.client_email : row.trainer_email,
+      lastMessageContent: row.last_message_content ?? undefined,
+      unreadCount: row.unread_count,
+    };
+  });
 }
 
 /**

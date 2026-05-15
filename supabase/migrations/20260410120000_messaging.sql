@@ -197,7 +197,55 @@ begin
 end;
 $$;
 
--- 6. RPC: mark_messages_read — only updates read_at, nothing else
+-- 6. RPC: get_conversations — returns conversations with last message and unread count in one query
+create or replace function public.get_conversations()
+returns json
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  return (
+    select coalesce(json_agg(row_to_json(t)), '[]'::json)
+    from (
+      select
+        c.id,
+        c.trainer_id,
+        c.client_id,
+        c.last_message_at,
+        c.created_at,
+        tp.name as trainer_name,
+        tp.email as trainer_email,
+        cp.name as client_name,
+        cp.email as client_email,
+        lm.content as last_message_content,
+        coalesce(unread.cnt, 0) as unread_count
+      from public.conversations c
+      join public.profiles tp on tp.id = c.trainer_id
+      join public.profiles cp on cp.id = c.client_id
+      left join lateral (
+        select m.content
+        from public.messages m
+        where m.conversation_id = c.id
+        order by m.created_at desc
+        limit 1
+      ) lm on true
+      left join lateral (
+        select count(*)::int as cnt
+        from public.messages m
+        where m.conversation_id = c.id
+          and m.sender_id != v_user_id
+          and m.read_at is null
+      ) unread on true
+      where c.trainer_id = v_user_id or c.client_id = v_user_id
+      order by c.last_message_at desc
+    ) t
+  );
+end;
+$$;
+
+-- 7. RPC: mark_messages_read — only updates read_at, nothing else
 create or replace function public.mark_messages_read(p_conversation_id uuid)
 returns void
 language plpgsql security definer
