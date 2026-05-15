@@ -144,11 +144,12 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
 function formatMessageDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const today = now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
 
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
+  if (date.toDateString() === today) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
