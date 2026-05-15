@@ -180,6 +180,8 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [otherUserName, setOtherUserName] = useState<string>('');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
   // Load messages and other user info
@@ -190,6 +192,7 @@ export default function ChatScreen() {
     try {
       const msgs = await getMessages(conversationId);
       setMessages(msgs);
+      setHasMore(msgs.length >= 50);
 
       // Mark messages as read
       await markMessagesRead(conversationId);
@@ -219,6 +222,21 @@ export default function ChatScreen() {
       setLoading(false);
     }
   }, [conversationId, user]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!conversationId || loadingMore || !hasMore || messages.length === 0) return;
+    setLoadingMore(true);
+    try {
+      const oldest = messages[messages.length - 1].createdAt;
+      const older = await getMessages(conversationId, 50, oldest);
+      if (older.length < 50) setHasMore(false);
+      if (older.length > 0) {
+        setMessages((prev) => [...prev, ...older]);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [conversationId, loadingMore, hasMore, messages]);
 
   useEffect(() => {
     loadMessages();
@@ -355,6 +373,9 @@ export default function ChatScreen() {
             style={styles.messageList}
             contentContainerStyle={styles.messageListContent}
             showsVerticalScrollIndicator={false}
+            onEndReached={loadOlderMessages}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={{ paddingVertical: Spacing.md }} /> : null}
           />
         )}
 

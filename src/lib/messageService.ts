@@ -79,14 +79,21 @@ export async function getTotalUnreadCount(userId: string): Promise<number> {
 
 /**
  * Get messages for a conversation, newest first.
+ * Pass `before` (ISO timestamp) to paginate older messages.
  */
-export async function getMessages(conversationId: string, limit = 50): Promise<Message[]> {
-  const { data, error } = await supabase
+export async function getMessages(conversationId: string, limit = 50, before?: string): Promise<Message[]> {
+  let query = supabase
     .from('messages')
     .select('id, conversation_id, sender_id, content, read_at, created_at')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  if (before) {
+    query = query.lt('created_at', before);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
 
