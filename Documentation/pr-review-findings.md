@@ -122,7 +122,7 @@ The code accepts a "due date" when creating assignments, but there's no date pic
 
 ## PR #99 — fix: handle mismatched remote migration history in CI
 
-**Status:** Merged. Has a significant correctness issue.
+**Status:** Merged. ~~Has a significant correctness issue.~~ **RESOLVED by PR #110** (migrations renamed to 14-digit timestamps).
 
 | Severity | Finding |
 |----------|---------|
@@ -149,7 +149,7 @@ All CI commands have "ignore errors" flags (`|| true`, `2>/dev/null`). If someth
 
 ## PR #101 — fix: mark existing migrations as applied before pushing
 
-**Status:** Merged. Minor concern only.
+**Status:** Merged. ~~Minor concern only.~~ **RESOLVED by PR #110** (root cause fixed, this workaround is no longer exercised).
 
 | Severity | Finding |
 |----------|---------|
