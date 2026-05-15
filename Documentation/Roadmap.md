@@ -6,95 +6,108 @@ A bilingual (Bulgarian/English) mobile fitness app that connects personal traine
 
 **Trainer Model:** Hybrid — trainers can manage individual clients (1-to-1 personal coaching) AND publish programs that any user can follow (1-to-many public content).
 
-**Communication:** Async feedback/notes on workouts first, full in-app messaging planned for a later phase.
+**Communication:** Full in-app messaging between trainers and clients, plus async workout feedback.
 
 **Monetization:** Deferred — build the best experience first, decide on revenue model later.
 
 ## Tech Stack
 
 - **Frontend:** React Native (Expo SDK 54), TypeScript, expo-router v6
-- **Backend:** Supabase (Auth + PostgreSQL with Row Level Security)
+- **Backend:** Supabase (Auth + PostgreSQL with Row Level Security + Realtime)
 - **State:** React Context + local state
 - **i18n:** Custom translation system (BG + EN)
 
 ## Phase Breakdown
 
-### Phase 1: Quality & Stability
+### Phase 1: Quality & Stability -- COMPLETE
 
-Fix bugs and establish code quality foundations before adding features.
+Fixed bugs and established code quality foundations.
 
-**Focus areas:**
-- Fix i18n reactivity and hardcoded strings
-- Make workout saving atomic (prevent partial data)
-- Fix broken UI buttons (forgot password, profile settings)
-- Set up testing infrastructure (Jest + RNTL)
-- Add loading states, input validation, error feedback
-- Remove dead code
+**Delivered:**
+- Fixed i18n reactivity and hardcoded strings (issues #1, #2)
+- Atomic workout saving via RPC (prevents partial data)
+- Fixed broken UI buttons (forgot password, profile settings)
+- Testing infrastructure (Jest + RNTL)
+- Loading states, input validation, error feedback
+- Removed dead code
 
-### Phase 2: Profile & UX Polish
+### Phase 2: Profile & UX Polish -- COMPLETE
 
-Complete the user-facing features that are currently placeholders.
+Completed user-facing features that were previously placeholders.
 
-**Focus areas:**
+**Delivered:**
 - Edit Profile screen (name, weight, height, goal)
 - Dark theme support
 - Push notifications (workout reminders, streak alerts)
 - Help/Terms static pages
 - Offline handling with graceful degradation
 
-### Phase 3: Trainer Core
+### Phase 3: Trainer Core -- COMPLETE
 
-Build the trainer platform — the main differentiator.
+Built the trainer platform — the main differentiator.
 
-**Focus areas:**
-- Client-trainer relationship (invite code linking, DB schema, RLS policies)
-- Trainer dashboard (client count, activity overview, pending invites)
+**Delivered:**
+- Client-trainer relationship (permanent invite codes, connection approval flow, RLS policies)
+- Trainer dashboard (client count, activity overview, pending requests)
 - Client progress monitoring (view client workout history, streaks, body metrics)
-- Custom workout builder (exercises, sets, reps, rest, difficulty)
+- Custom workout builder (exercises, sets, reps, rest, difficulty — bilingual)
+- Custom workouts for all users (trainers and clients can create)
 - Workout assignment (assign programs to specific clients, track completion)
-- Public workout programs (publish for any user to follow)
-- Workout feedback/notes (trainer comments on completed workouts)
-- Client goal setting (targets for weight, reps, frequency)
+- Workout feedback (trainer comments on completed client workouts)
+- Client goal setting (targets for weight, reps, frequency, custom)
+- Trainer goal suggestions (new goals + adjustments, client accept/reject flow)
+- In-app messaging (real-time chat between trainer and client, conversations, pagination)
 
 ### Phase 4: Differentiators (Future)
 
 Features that would set GymApp apart from competitors.
 
 **Focus areas:**
-- Video form checks — client attaches video to sets, trainer provides technique feedback
-- AI-powered programming — analyze logged performance, suggest progressive overload / deload weeks
+- Public workout programs — publish trainer workouts for any user to follow (#21)
+- Video form checks — client attaches video to sets, trainer provides technique feedback (#24)
+- AI-powered programming — analyze logged performance, suggest progressive overload / deload weeks (#25)
+- Custom domain and branding (#40)
 - Holistic tracking — nutrition logging (macros, calories) + sleep/recovery tracking
 - Gamification — challenges between clients, leaderboards, achievements, badges
-- Custom workouts for all users (not just trainers)
-- In-app messaging (real-time chat between trainer and client)
 
 ## Architecture Decisions
 
 ### Database (Supabase PostgreSQL)
 
-**Current schema:** `profiles`, `workout_logs`, `exercise_logs`, `set_logs`, `body_metrics`
-
-**Planned additions for trainer features:**
-- `trainer_clients` — relationship table (trainer_id, client_id, status, connected_at)
-- `custom_workouts` — trainer-created templates (creator_id, name, exercises, difficulty, is_public)
-- `workout_assignments` — assigned workouts (trainer_id, client_id, workout_id, due_date, status)
-- `workout_feedback` — trainer notes on completed workouts (workout_log_id, trainer_id, message)
-- `client_goals` — targets set by trainer (client_id, trainer_id, type, target_value, deadline)
+**Implemented schema (12 tables):**
+- `profiles` — user accounts with role, language, trainer_code
+- `workout_logs` — completed workout sessions
+- `exercise_logs` — exercises within a workout
+- `set_logs` — individual sets within an exercise
+- `body_metrics` — daily weight tracking
+- `trainer_clients` — trainer-client relationships (status: pending/active/rejected/removed)
+- `custom_workouts` — reusable workout templates (trainers + clients)
+- `workout_assignments` — trainer assigns workouts to clients
+- `workout_feedback` — trainer comments on client workout logs
+- `client_goals` — client-owned goals (weight_target, lift_target, frequency, custom)
+- `goal_suggestions` — trainer suggestions for new/adjusted goals
+- `conversations` — one per trainer-client pair
+- `messages` — in-app messages with read receipts
 
 **RLS Strategy for trainer-client access:**
 - Trainers can READ their connected clients' workout_logs, exercise_logs, set_logs, body_metrics
-- Trainers can WRITE to workout_assignments, workout_feedback, client_goals for their clients
+- Trainers can WRITE to workout_assignments, workout_feedback, goal_suggestions for their clients
 - Public workouts are readable by all authenticated users
 - Clients can only see their own trainer (not other trainers' data)
+- Messaging restricted to conversation participants with active connections
 
 ### Conditional Navigation
 
-The tab layout will conditionally render based on `profile.role`:
+The tab layout conditionally renders based on `profile.role`:
 - **Client tabs:** Home, Workouts, Progress, Profile
 - **Trainer tabs:** Dashboard, Clients, Programs, Profile
 
 Both roles share the Profile tab. Trainer-specific screens live in a separate route group.
 
-### Invite-Based Linking
+### Permanent Invite Codes
 
-Trainers generate invite codes. Clients enter the code to connect. This avoids the complexity of search/discovery and keeps the MVP simple. Future: QR codes, shareable links.
+Trainers have a permanent 6-character code (auto-generated on signup, stored in `profiles.trainer_code`). Clients enter the code to initiate a connection. This is simpler than the previous one-time invite code approach and never expires. Future: QR codes, shareable links.
+
+### Realtime Messaging
+
+The chat feature uses Supabase Realtime (WebSocket subscriptions on the `messages` table) for instant message delivery. This is the only feature using Realtime — all other data is fetched on-demand via `useFocusAsyncData`.
