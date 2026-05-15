@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 007: In-app messaging (trainer ↔ client)
+-- In-app messaging (trainer ↔ client)
 -- Creates conversations and messages tables with RLS policies.
 -- ============================================================
 
