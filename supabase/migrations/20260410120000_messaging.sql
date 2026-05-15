@@ -260,5 +260,11 @@ begin
 end;
 $$;
 
--- 7. Enable Realtime for messages table
+-- 8. Grant execute on RPC functions to authenticated users
+grant execute on function public.send_message(uuid, text) to authenticated;
+grant execute on function public.get_or_create_conversation(uuid) to authenticated;
+grant execute on function public.get_conversations() to authenticated;
+grant execute on function public.mark_messages_read(uuid) to authenticated;
+
+-- 9. Enable Realtime for messages table
 alter publication supabase_realtime add table public.messages;
