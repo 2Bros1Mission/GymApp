@@ -172,7 +172,7 @@ export default function TrainerDashboardScreen() {
                   <Pressable
                     key={a.id}
                     style={styles.activityItem}
-                    onPress={() => router.push(`/client-progress?clientId=${a.clientId}`)}
+                    onPress={() => a.clientId && router.push(`/client-progress?clientId=${a.clientId}`)}
                   >
                     <View style={styles.activityAvatar}>
                       <Text style={styles.activityAvatarText}>
@@ -218,7 +218,7 @@ export default function TrainerDashboardScreen() {
                   <Pressable
                     key={c.id}
                     style={styles.clientItem}
-                    onPress={() => router.push(`/client-progress?clientId=${c.clientId}`)}
+                    onPress={() => c.clientId && router.push(`/client-progress?clientId=${c.clientId}`)}
                   >
                     <View style={styles.clientAvatar}>
                       <Text style={styles.clientAvatarText}>
