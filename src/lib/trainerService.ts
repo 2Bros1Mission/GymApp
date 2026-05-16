@@ -343,45 +343,19 @@ export async function deleteCustomWorkout(workoutId: string): Promise<{ error?: 
 // ─── Recent Client Activity ────────────────────────────────────────
 
 export async function getRecentClientActivity(trainerId: string, limit = 30): Promise<RecentActivity[]> {
-  const { data: clients, error: clientsError } = await supabase
-    .from('trainer_clients')
-    .select('client_id')
-    .eq('trainer_id', trainerId)
-    .eq('status', 'active');
-
-  if (clientsError) throw new Error(clientsError.message);
-
-  const clientIds = (clients ?? []).map((c) => c.client_id);
-  if (clientIds.length === 0) return [];
-
   const { data, error } = await supabase
-    .from('workout_logs')
-    .select(`
-      id,
-      workout_name,
-      date,
-      duration_seconds,
-      user_id,
-      client:profiles!workout_logs_user_id_fkey ( name )
-    `)
-    .in('user_id', clientIds)
-    .eq('completed', true)
-    .order('date', { ascending: false })
-    .limit(limit);
+    .rpc('get_recent_client_activity', { p_trainer_id: trainerId, p_limit: limit });
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((row) => {
-    const client = row.client as unknown as { name: string } | null;
-    return {
-      id: row.id,
-      clientId: row.user_id,
-      clientName: client?.name ?? '--',
-      workoutName: row.workout_name,
-      date: row.date,
-      durationSeconds: row.duration_seconds,
-    };
-  });
+  return (data ?? []).map((row: { id: string; user_id: string; client_name: string | null; workout_name: string; date: string; duration_seconds: number }) => ({
+    id: row.id,
+    clientId: row.user_id,
+    clientName: row.client_name ?? '--',
+    workoutName: row.workout_name,
+    date: row.date,
+    durationSeconds: row.duration_seconds,
+  }));
 }
 
 // ─── Client Progress Monitoring ─────────────────────────────────────
