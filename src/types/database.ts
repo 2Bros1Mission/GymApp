@@ -694,6 +694,17 @@ export type Database = {
       }
       send_message: { Args: { p_conversation_id: string; p_content: string }; Returns: Json }
       mark_messages_read: { Args: { p_conversation_id: string }; Returns: undefined }
+      get_recent_client_activity: {
+        Args: { p_trainer_id: string; p_limit?: number }
+        Returns: {
+          id: string
+          user_id: string
+          workout_name: string
+          date: string
+          duration_seconds: number
+          client_name: string | null
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
