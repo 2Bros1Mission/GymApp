@@ -343,6 +343,17 @@ export async function deleteCustomWorkout(workoutId: string): Promise<{ error?: 
 // ─── Recent Client Activity ────────────────────────────────────────
 
 export async function getRecentClientActivity(trainerId: string, limit = 30): Promise<RecentActivity[]> {
+  const { data: clients, error: clientsError } = await supabase
+    .from('trainer_clients')
+    .select('client_id')
+    .eq('trainer_id', trainerId)
+    .eq('status', 'active');
+
+  if (clientsError) throw new Error(clientsError.message);
+
+  const clientIds = (clients ?? []).map((c) => c.client_id);
+  if (clientIds.length === 0) return [];
+
   const { data, error } = await supabase
     .from('workout_logs')
     .select(`
@@ -353,6 +364,7 @@ export async function getRecentClientActivity(trainerId: string, limit = 30): Pr
       user_id,
       client:profiles!workout_logs_user_id_fkey ( name )
     `)
+    .in('user_id', clientIds)
     .eq('completed', true)
     .order('date', { ascending: false })
     .limit(limit);
