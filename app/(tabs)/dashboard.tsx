@@ -77,7 +77,7 @@ export default function TrainerDashboardScreen() {
       getTrainerClients(user.id),
       getTrainerCode(user.id),
       getCustomWorkouts(user.id),
-      getRecentClientActivity(user.id),
+      getRecentClientActivity(user.id).catch(() => [] as RecentActivity[]),
     ]);
     return { clients, trainerCode, workouts, recentActivity };
   }, [user]);
