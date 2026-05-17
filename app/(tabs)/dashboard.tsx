@@ -11,6 +11,7 @@ import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
 import { ErrorCard } from '../../src/components/ErrorCard';
 import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
 import { getTrainerClients, getCustomWorkouts, getTrainerCode, getRecentClientActivity } from '../../src/lib/trainerService';
+import { formatDate } from '../../src/lib/formatDate';
 import type { TrainerClient, CustomWorkout, RecentActivity } from '../../src/types';
 
 interface DashboardData {
@@ -107,7 +108,7 @@ export default function TrainerDashboardScreen() {
       <View style={styles.activityInfo}>
         <Text style={styles.activityName}>{a.clientName}</Text>
         <Text style={styles.activityMeta}>
-          {a.workoutName} · {new Date(a.date).toLocaleDateString()}
+          {a.workoutName} · {formatDate(a.date, language)}
         </Text>
       </View>
       {a.durationSeconds != null && (
@@ -116,7 +117,7 @@ export default function TrainerDashboardScreen() {
         </Text>
       )}
     </Pressable>
-  ), [styles, router, t]);
+  ), [styles, router, t, language]);
 
   const ListHeader = useMemo(() => (
     <ResponsiveContainer>
@@ -227,7 +228,7 @@ export default function TrainerDashboardScreen() {
                 <View style={styles.clientInfo}>
                   <Text style={styles.clientName}>{c.clientName ?? '--'}</Text>
                   <Text style={styles.clientDate}>
-                    {t('trainer.connectedSince')} {new Date(c.connectedAt).toLocaleDateString()}
+                    {t('trainer.connectedSince')} {formatDate(c.connectedAt, language)}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

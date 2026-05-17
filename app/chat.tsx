@@ -28,6 +28,8 @@ import {
 } from '../src/lib/messageService';
 import { supabase } from '../src/lib/supabase';
 import type { Message } from '../src/types';
+import { formatDate } from '../src/lib/formatDate';
+import type { Language } from '../src/contexts/LanguageContext';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -141,7 +143,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   },
 });
 
-function formatMessageDate(dateStr: string): string {
+function formatMessageDate(dateStr: string, language: Language): string {
   const date = new Date(dateStr);
   const now = new Date();
   const today = now.toDateString();
@@ -150,7 +152,7 @@ function formatMessageDate(dateStr: string): string {
 
   if (date.toDateString() === today) return 'Today';
   if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+  return formatDate(date, language, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 function formatTime(dateStr: string): string {
@@ -168,7 +170,7 @@ export default function ChatScreen() {
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
@@ -310,7 +312,7 @@ export default function ChatScreen() {
         {showDate && (
           <View style={styles.dateSeparator}>
             <Text style={styles.dateSeparatorText}>
-              {formatMessageDate(item.createdAt)}
+              {formatMessageDate(item.createdAt, language)}
             </Text>
           </View>
         )}

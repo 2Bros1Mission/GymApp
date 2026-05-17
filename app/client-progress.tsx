@@ -12,6 +12,7 @@ import { ErrorCard } from '../src/components/ErrorCard';
 import { getClientProgress } from '../src/lib/trainerService';
 import { getClientGoalsForTrainer } from '../src/lib/goalService';
 import type { ClientProgress, ClientGoal } from '../src/types';
+import { formatDate } from '../src/lib/formatDate';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -100,7 +101,7 @@ export default function ClientProgressScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ clientId: string }>();
   const clientId = Array.isArray(params.clientId) ? params.clientId[0] : params.clientId;
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
@@ -229,7 +230,7 @@ export default function ClientProgressScreen() {
                 <Ionicons name="calendar" size={20} color={colors.success} />
                 <Text style={styles.statValue}>
                   {progress.lastWorkoutDate
-                    ? new Date(progress.lastWorkoutDate).toLocaleDateString()
+                    ? formatDate(progress.lastWorkoutDate, language)
                     : '--'}
                 </Text>
                 <Text style={styles.statLabel}>{t('clientProgress.lastWorkout')}</Text>
@@ -330,7 +331,7 @@ export default function ClientProgressScreen() {
                   <View style={styles.workoutInfo}>
                     <Text style={styles.workoutName}>{w.workoutName}</Text>
                     <Text style={styles.workoutMeta}>
-                      {new Date(w.date).toLocaleDateString()}
+                      {formatDate(w.date, language)}
                     </Text>
                   </View>
                   <Text style={styles.workoutDuration}>

@@ -19,6 +19,7 @@ import {
   refreshGoalProgress,
 } from '../src/lib/goalService';
 import type { ClientGoal, GoalSuggestion, GoalType } from '../src/types';
+import { formatDate } from '../src/lib/formatDate';
 
 const GOAL_TYPES: GoalType[] = ['weight_target', 'lift_target', 'frequency', 'custom'];
 
@@ -102,7 +103,7 @@ const emptyForm: GoalForm = { goalType: 'custom', title: '', targetValue: '', un
 
 export default function GoalsScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -317,7 +318,7 @@ export default function GoalsScreen() {
         )}
 
         {goal.deadline && (
-          <Text style={styles.goalDetail}>{t('goals.deadline')}: {new Date(goal.deadline).toLocaleDateString()}</Text>
+          <Text style={styles.goalDetail}>{t('goals.deadline')}: {formatDate(goal.deadline, language)}</Text>
         )}
 
         {goal.status === 'completed' ? (

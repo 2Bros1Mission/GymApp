@@ -10,6 +10,8 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useFocusAsyncData } from '../src/hooks/useAsyncData';
 import { getWorkoutDetail, addWorkoutFeedback } from '../src/lib/feedbackService';
 import type { WorkoutDetail } from '../src/types';
+import { formatDate } from '../src/lib/formatDate';
+import type { Language } from '../src/contexts/LanguageContext';
 
 const EMPTY_DETAIL: WorkoutDetail = {
   id: '',
@@ -74,7 +76,7 @@ function formatDuration(seconds: number | null): string {
   return `${mins} min`;
 }
 
-function formatRelativeTime(dateStr: string): string {
+function formatRelativeTime(dateStr: string, language: Language): string {
   const now = new Date();
   const date = new Date(dateStr);
   const diffMs = now.getTime() - date.getTime();
@@ -85,7 +87,7 @@ function formatRelativeTime(dateStr: string): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
+  return formatDate(date, language);
 }
 
 export default function WorkoutDetailScreen() {
@@ -93,7 +95,7 @@ export default function WorkoutDetailScreen() {
   const params = useLocalSearchParams<{ workoutLogId: string; clientId?: string }>();
   const workoutLogId = Array.isArray(params.workoutLogId) ? params.workoutLogId[0] : params.workoutLogId;
 
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { user, profile } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -162,7 +164,7 @@ export default function WorkoutDetailScreen() {
             <View style={styles.statsRow}>
               <View style={styles.statBadge}>
                 <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.statText}>{new Date(detail.date).toLocaleDateString()}</Text>
+                <Text style={styles.statText}>{formatDate(detail.date, language)}</Text>
               </View>
               <View style={styles.statBadge}>
                 <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
@@ -222,7 +224,7 @@ export default function WorkoutDetailScreen() {
                   <View style={styles.feedbackBubble}>
                     <View style={styles.feedbackHeader}>
                       <Text style={styles.feedbackName}>{fb.trainerName || t('feedback.fromTrainer')}</Text>
-                      <Text style={styles.feedbackTime}>{formatRelativeTime(fb.createdAt)}</Text>
+                      <Text style={styles.feedbackTime}>{formatRelativeTime(fb.createdAt, language)}</Text>
                     </View>
                     <Text style={styles.feedbackMessage}>{fb.message}</Text>
                   </View>

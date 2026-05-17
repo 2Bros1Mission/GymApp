@@ -14,6 +14,7 @@ import { useTheme } from '../../src/contexts/ThemeContext';
 import { SkeletonWorkoutCard } from '../../src/components/SkeletonLoader';
 import { useFocusAsyncData } from '../../src/hooks/useAsyncData';
 import { getClientAssignments, getCustomWorkouts, deleteCustomWorkout } from '../../src/lib/trainerService';
+import { formatDate } from '../../src/lib/formatDate';
 
 const muscleGroupIcons: Record<MuscleGroup, React.ComponentProps<typeof Ionicons>['name']> = {
   chest: 'body',
@@ -222,7 +223,7 @@ export default function WorkoutsScreen() {
                     </Text>
                     {a.dueDate && (
                       <Text style={styles.assignedCardDue}>
-                        {t('assignments.dueDateLabel', { date: new Date(a.dueDate).toLocaleDateString() })}
+                        {t('assignments.dueDateLabel', { date: formatDate(a.dueDate, language) })}
                       </Text>
                     )}
                   </View>

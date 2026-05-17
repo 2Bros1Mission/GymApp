@@ -23,6 +23,7 @@ import {
 } from '../src/lib/trainerService';
 import { getOrCreateConversation } from '../src/lib/messageService';
 import type { TrainerClient } from '../src/types';
+import { formatDate } from '../src/lib/formatDate';
 
 interface ClientsData {
   clients: TrainerClient[];
@@ -73,7 +74,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
 export default function TrainerClientsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
@@ -162,10 +163,6 @@ export default function TrainerClientsScreen() {
     });
   };
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString();
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -256,7 +253,7 @@ export default function TrainerClientsScreen() {
                 <Text style={styles.clientName}>{client.clientName ?? '--'}</Text>
                 <Text style={styles.clientEmail}>{client.clientEmail ?? ''}</Text>
                 <Text style={styles.clientDate}>
-                  {t('trainer.connectedSince')} {formatDate(client.connectedAt)}
+                  {t('trainer.connectedSince')} {formatDate(client.connectedAt, language)}
                 </Text>
               </View>
               <Pressable
