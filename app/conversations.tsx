@@ -12,6 +12,8 @@ import { useFocusAsyncData } from '../src/hooks/useAsyncData';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { getConversations } from '../src/lib/messageService';
 import type { Conversation } from '../src/types';
+import { formatDate } from '../src/lib/formatDate';
+import type { Language } from '../src/contexts/LanguageContext';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -92,7 +94,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   },
 });
 
-function formatMessageTime(dateStr: string): string {
+function formatMessageTime(dateStr: string, language: Language): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -103,15 +105,15 @@ function formatMessageTime(dateStr: string): string {
   }
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: 'short' });
+    return formatDate(date, language, { weekday: 'short' });
   }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return formatDate(date, language, { month: 'short', day: 'numeric' });
 }
 
 export default function ConversationsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
@@ -166,7 +168,7 @@ export default function ConversationsScreen() {
                       {conv.otherUserName ?? '--'}
                     </Text>
                     <Text style={styles.timeText}>
-                      {formatMessageTime(conv.lastMessageAt)}
+                      {formatMessageTime(conv.lastMessageAt, language)}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>

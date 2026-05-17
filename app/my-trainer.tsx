@@ -13,6 +13,7 @@ import { ErrorCard } from '../src/components/ErrorCard';
 import { confirmAction } from '../src/lib/confirm';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import { redeemInviteCode, getClientTrainer, removeConnection, confirmConnection } from '../src/lib/trainerService';
+import { formatDate } from '../src/lib/formatDate';
 import { getOrCreateConversation } from '../src/lib/messageService';
 import type { TrainerClient } from '../src/types';
 
@@ -70,7 +71,7 @@ interface PendingConfirmation {
 export default function MyTrainerScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const breakpoint = useBreakpoint();
@@ -184,11 +185,6 @@ export default function MyTrainerScreen() {
     });
   };
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString();
-  };
-
   const renderTrainerContent = () => {
     if (loading) {
       return <ActivityIndicator color={colors.primary} style={{ marginTop: Spacing.xxl }} />;
@@ -243,7 +239,7 @@ export default function MyTrainerScreen() {
             </View>
             <Text style={styles.trainerName}>{trainer.trainerName ?? '--'}</Text>
             <Text style={styles.trainerDate}>
-              {t('trainer.connectedSince')} {formatDate(trainer.connectedAt)}
+              {t('trainer.connectedSince')} {formatDate(trainer.connectedAt, language)}
             </Text>
             <Pressable
               style={styles.messageBtn}

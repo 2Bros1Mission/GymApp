@@ -3,7 +3,7 @@ import { translations } from '../constants/i18n';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
 
-type Language = 'bg' | 'en';
+export type Language = 'bg' | 'en';
 
 interface LanguageState {
   language: Language;
