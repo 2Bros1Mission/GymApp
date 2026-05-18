@@ -20,6 +20,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useAsyncData } from '../src/hooks/useAsyncData';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import { ErrorCard } from '../src/components/ErrorCard';
+import { CelebrationModal } from '../src/components/CelebrationModal';
 import { supabase } from '../src/lib/supabase';
 import {
   getChallengeDetail,
@@ -144,6 +145,7 @@ export default function ChallengeDetailScreen() {
 
   const [joining, setJoining] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const [progressInputs, setProgressInputs] = useState<Record<string, string>>({});
   const [updatingProgress, setUpdatingProgress] = useState<string | null>(null);
 
@@ -239,6 +241,7 @@ export default function ChallengeDetailScreen() {
               retryChallenge();
               refreshLeaderboard();
               refreshRewards();
+              setShowCelebration(true);
             }
           } finally {
             setCompleting(false);
@@ -570,6 +573,15 @@ export default function ChallengeDetailScreen() {
         {/* Bottom spacing */}
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
+
+      <CelebrationModal
+        visible={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        challengeTitle={challenge?.title ?? ''}
+        leaderboard={leaderboard}
+        rewards={[]}
+        currentUserId={user?.id ?? ''}
+      />
     </SafeAreaView>
   );
 }
