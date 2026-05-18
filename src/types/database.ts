@@ -581,6 +581,183 @@ export type Database = {
           },
         ]
       }
+      challenges: {
+        Row: {
+          id: string
+          creator_id: string
+          title: string
+          title_bg: string | null
+          description: string | null
+          description_bg: string | null
+          challenge_type: string
+          target_value: number
+          start_date: string
+          end_date: string
+          status: string
+          reward_type: string | null
+          reward_description: string | null
+          reward_tiers: Json | null
+          discount_value: number | null
+          discount_type: string | null
+          participant_count: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          creator_id: string
+          title: string
+          title_bg?: string | null
+          description?: string | null
+          description_bg?: string | null
+          challenge_type: string
+          target_value: number
+          start_date: string
+          end_date: string
+          status?: string
+          reward_type?: string | null
+          reward_description?: string | null
+          reward_tiers?: Json | null
+          discount_value?: number | null
+          discount_type?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          creator_id?: string
+          title?: string
+          title_bg?: string | null
+          description?: string | null
+          description_bg?: string | null
+          challenge_type?: string
+          target_value?: number
+          start_date?: string
+          end_date?: string
+          status?: string
+          reward_type?: string | null
+          reward_description?: string | null
+          reward_tiers?: Json | null
+          discount_value?: number | null
+          discount_type?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_participants: {
+        Row: {
+          id: string
+          challenge_id: string
+          user_id: string
+          joined_at: string
+          progress: number
+          rank: number | null
+          invited_by_trainer: boolean
+        }
+        Insert: {
+          id?: string
+          challenge_id: string
+          user_id: string
+          joined_at?: string
+          progress?: number
+          rank?: number | null
+          invited_by_trainer?: boolean
+        }
+        Update: {
+          id?: string
+          challenge_id?: string
+          user_id?: string
+          joined_at?: string
+          progress?: number
+          rank?: number | null
+          invited_by_trainer?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_participants_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenge_rewards: {
+        Row: {
+          id: string
+          challenge_id: string
+          user_id: string
+          reward_type: string
+          badge_name: string | null
+          discount_code: string | null
+          discount_value: number | null
+          discount_type: string | null
+          redeemed: boolean
+          redeemed_at: string | null
+          tier_level: number | null
+          description: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          challenge_id: string
+          user_id: string
+          reward_type: string
+          badge_name?: string | null
+          discount_code?: string | null
+          discount_value?: number | null
+          discount_type?: string | null
+          redeemed?: boolean
+          redeemed_at?: string | null
+          tier_level?: number | null
+          description?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          challenge_id?: string
+          user_id?: string
+          reward_type?: string
+          badge_name?: string | null
+          discount_code?: string | null
+          discount_value?: number | null
+          discount_type?: string | null
+          redeemed?: boolean
+          redeemed_at?: string | null
+          tier_level?: number | null
+          description?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_rewards_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_rewards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_feedback: {
         Row: {
           id: string
@@ -694,6 +871,41 @@ export type Database = {
       }
       send_message: { Args: { p_conversation_id: string; p_content: string }; Returns: Json }
       mark_messages_read: { Args: { p_conversation_id: string }; Returns: undefined }
+      get_challenge_leaderboard: {
+        Args: { p_challenge_id: string }
+        Returns: Json
+      }
+      update_custom_progress: {
+        Args: { p_participant_id: string; p_progress: number }
+        Returns: Json
+      }
+      complete_challenge: {
+        Args: { p_challenge_id: string }
+        Returns: Json
+      }
+      redeem_discount_code: {
+        Args: { p_reward_id: string }
+        Returns: Json
+      }
+      create_challenge: {
+        Args: {
+          p_title: string
+          p_title_bg?: string | null
+          p_description?: string | null
+          p_description_bg?: string | null
+          p_challenge_type?: string
+          p_target_value?: number
+          p_start_date?: string
+          p_end_date?: string
+          p_reward_type?: string | null
+          p_reward_description?: string | null
+          p_reward_tiers?: Json | null
+          p_discount_value?: number | null
+          p_discount_type?: string | null
+          p_participant_ids?: string[]
+        }
+        Returns: Json
+      }
       get_recent_client_activity: {
         Args: { p_trainer_id: string; p_limit?: number }
         Returns: {
