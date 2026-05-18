@@ -263,3 +263,16 @@ export interface TrainerClient {
   clientEmail?: string;
   trainerName?: string;
 }
+
+export type {
+  ChallengeType,
+  ChallengeStatus,
+  RewardType,
+  DiscountType,
+  ChallengeRewardKind,
+  BattlePassTier,
+  Challenge,
+  ChallengeParticipant,
+  LeaderboardEntry,
+  ChallengeReward,
+} from './challenges';
