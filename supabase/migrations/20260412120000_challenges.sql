@@ -139,17 +139,9 @@ create policy "Join challenges"
     )
   );
 
--- Only challenge creator can update (for custom progress, rank)
+-- No open UPDATE policy on challenge_participants.
+-- Updates happen via SECURITY DEFINER RPCs: complete_challenge and update_custom_progress.
 drop policy if exists "Trainer updates participant progress" on public.challenge_participants;
-create policy "Trainer updates participant progress"
-  on public.challenge_participants for update
-  using (
-    exists (
-      select 1 from public.challenges c
-      where c.id = challenge_participants.challenge_id
-        and c.creator_id = auth.uid()
-    )
-  );
 
 -- 3. Challenge rewards table (earned rewards)
 create table if not exists public.challenge_rewards (
@@ -184,17 +176,8 @@ create policy "Users read own rewards"
   );
 
 -- Only RPC inserts rewards (no direct insert policy for users)
--- Trainer can update redeemed status
+-- No open UPDATE policy — redemption happens via redeem_discount_code RPC.
 drop policy if exists "Trainer redeems discount codes" on public.challenge_rewards;
-create policy "Trainer redeems discount codes"
-  on public.challenge_rewards for update
-  using (
-    exists (
-      select 1 from public.challenges c
-      where c.id = challenge_rewards.challenge_id
-        and c.creator_id = auth.uid()
-    )
-  );
 
 -- 4. Indexes
 create index if not exists idx_challenges_creator on public.challenges(creator_id);
@@ -203,6 +186,21 @@ create index if not exists idx_challenge_participants_challenge on public.challe
 create index if not exists idx_challenge_participants_user on public.challenge_participants(user_id);
 create index if not exists idx_challenge_rewards_user on public.challenge_rewards(user_id);
 create index if not exists idx_challenge_rewards_challenge on public.challenge_rewards(challenge_id);
+
+-- Prevent duplicate non-tier rewards per user per challenge
+create unique index if not exists idx_challenge_rewards_unique_non_tier
+  on public.challenge_rewards(challenge_id, user_id, reward_type)
+  where tier_level is null;
+
+-- Prevent duplicate tier rewards per user per challenge per tier
+create unique index if not exists idx_challenge_rewards_unique_tier
+  on public.challenge_rewards(challenge_id, user_id, reward_type, tier_level)
+  where tier_level is not null;
+
+-- Prevent duplicate discount codes
+create unique index if not exists idx_challenge_rewards_discount_code
+  on public.challenge_rewards(discount_code)
+  where discount_code is not null;
 
 -- 5. RPC: Compute leaderboard rankings from workout_logs
 create or replace function public.get_challenge_leaderboard(p_challenge_id uuid)
@@ -382,7 +380,8 @@ begin
       insert into challenge_rewards (challenge_id, user_id, reward_type, badge_name, description)
       values (p_challenge_id, v_participant.user_id, 'badge',
               v_challenge.title || ' Winner',
-              coalesce(v_challenge.reward_description, 'Challenge winner!'));
+              coalesce(v_challenge.reward_description, 'Challenge winner!'))
+      on conflict do nothing;
 
     elsif v_challenge.reward_type = 'discount' and v_rank = 1 then
       v_code := 'GYM-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 4))
@@ -391,12 +390,14 @@ begin
                                      discount_value, discount_type, description)
       values (p_challenge_id, v_participant.user_id, 'discount_code', v_code,
               v_challenge.discount_value, v_challenge.discount_type,
-              coalesce(v_challenge.reward_description, 'Discount reward'));
+              coalesce(v_challenge.reward_description, 'Discount reward'))
+      on conflict do nothing;
 
     elsif v_challenge.reward_type = 'custom' and v_rank = 1 then
       insert into challenge_rewards (challenge_id, user_id, reward_type, description)
       values (p_challenge_id, v_participant.user_id, 'custom',
-              coalesce(v_challenge.reward_description, 'Challenge reward'));
+              coalesce(v_challenge.reward_description, 'Challenge reward'))
+      on conflict do nothing;
 
     elsif v_challenge.reward_type = 'battle_pass' then
       -- Battle pass: check each tier
@@ -476,3 +477,64 @@ create trigger trg_notify_challenge_workout
   for each row
   when (NEW.completed = true)
   execute function notify_challenge_workout();
+
+-- 8. RPC: Update custom challenge progress (trainer only)
+create or replace function public.update_custom_progress(
+  p_participant_id uuid,
+  p_progress numeric
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_challenge record;
+begin
+  -- Verify the caller is the challenge creator and it's a custom challenge
+  select c.* into v_challenge
+  from challenges c
+  join challenge_participants cp on cp.challenge_id = c.id
+  where cp.id = p_participant_id
+    and c.creator_id = auth.uid()
+    and c.challenge_type = 'custom'
+    and c.status = 'active';
+
+  if not found then
+    return json_build_object('success', false, 'error', 'not_authorized_or_not_custom');
+  end if;
+
+  update challenge_participants
+  set progress = p_progress
+  where id = p_participant_id;
+
+  return json_build_object('success', true);
+end;
+$$;
+
+-- 9. RPC: Mark a discount code as redeemed (trainer only)
+create or replace function public.redeem_discount_code(p_reward_id uuid)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Verify caller is the challenge creator
+  if not exists (
+    select 1 from challenge_rewards cr
+    join challenges c on c.id = cr.challenge_id
+    where cr.id = p_reward_id
+      and c.creator_id = auth.uid()
+      and cr.redeemed = false
+  ) then
+    return json_build_object('success', false, 'error', 'not_authorized_or_already_redeemed');
+  end if;
+
+  update challenge_rewards
+  set redeemed = true, redeemed_at = now()
+  where id = p_reward_id;
+
+  return json_build_object('success', true);
+end;
+$$;
