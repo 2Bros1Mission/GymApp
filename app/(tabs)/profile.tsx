@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,12 +8,15 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useLanguage } from '../../src/contexts/LanguageContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { ResponsiveContainer } from '../../src/components/ResponsiveContainer';
+import { BadgeDisplay } from '../../src/components/BadgeDisplay';
 import {
   getNotificationPreferences,
   toggleNotifications,
   updateReminderTime,
   addNotificationResponseListener,
 } from '../../src/lib/notificationService';
+import { getEarnedRewards } from '../../src/lib/challengeService';
+import type { ChallengeReward } from '../../src/types';
 
 const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -64,6 +67,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
   timeOptionActive: { backgroundColor: colors.primary },
   timeOptionText: { fontSize: FontSize.sm, fontWeight: '600', color: colors.text },
   timeOptionTextActive: { color: colors.white },
+  emptyBadges: { fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', marginVertical: Spacing.md },
 });
 
 function ProfileMenuItem({ icon, label, value, onPress, danger, colors }: {
@@ -107,6 +111,27 @@ export default function ProfileScreen() {
   const [reminderHour, setReminderHour] = useState(9);
   const [reminderMinute, setReminderMinute] = useState(0);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [badges, setBadges] = useState<ChallengeReward[]>([]);
+  const [badgesLoading, setBadgesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    setBadgesLoading(true);
+    getEarnedRewards(profile.id)
+      .then((rewards) => {
+        if (!cancelled) {
+          const badgeRewards = rewards.filter(
+            (r) => r.rewardType === 'badge' || (r.rewardType === 'tier_reward' && r.badgeName != null),
+          );
+          setBadges(badgeRewards);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBadgesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [profile?.id]);
 
   useEffect(() => {
     getNotificationPreferences().then((prefs) => {
@@ -293,6 +318,24 @@ export default function ProfileScreen() {
                 colors={colors}
               />
             </View>
+          </View>
+
+          <View style={styles.menuSection}>
+            <Text style={styles.menuSectionTitle}>{t('challenges.rewards')}</Text>
+            {badgesLoading && (
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: Spacing.md }} />
+            )}
+            {!badgesLoading && badges.length === 0 && (
+              <Text style={styles.emptyBadges}>{t('challenges.noRewards')}</Text>
+            )}
+            {!badgesLoading && badges.map((badge) => (
+              <BadgeDisplay
+                key={badge.id}
+                badgeName={badge.badgeName ?? ''}
+                challengeTitle={badge.challengeTitle}
+                earnedAt={badge.createdAt}
+              />
+            ))}
           </View>
 
           <View style={styles.menuSection}>
