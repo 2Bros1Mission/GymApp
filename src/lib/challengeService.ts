@@ -194,12 +194,12 @@ export async function getChallengeLeaderboard(challengeId: string): Promise<Lead
   if (error) throw new Error(error.message);
   const result = data as unknown as {
     success: boolean;
-    leaderboard?: Array<{
+    leaderboard?: {
       user_id: string;
       user_name: string;
       progress: number;
       target: number;
-    }>;
+    }[];
     error?: string;
   };
   if (!result?.success) throw new Error(result?.error ?? 'leaderboard_failed');

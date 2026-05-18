@@ -7,7 +7,6 @@ import {
   TextInput,
   StyleSheet,
   Alert,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
