@@ -2,9 +2,13 @@
 -- Challenges & Gamification
 -- Creates challenges, challenge_participants, and challenge_rewards
 -- tables with RLS policies, indexes, and RPC functions.
+--
+-- NOTE: All three tables are created FIRST, before any RLS policies,
+-- because policies on `challenges` reference `challenge_participants`.
 -- ============================================================
 
--- 1. Challenges table
+-- ─── 1. Tables ─────────────────────────────────────────────────────────────
+
 create table if not exists public.challenges (
   id uuid primary key default gen_random_uuid(),
   creator_id uuid not null references public.profiles(id) on delete cascade,
@@ -25,9 +29,41 @@ create table if not exists public.challenges (
   created_at timestamptz not null default now()
 );
 
-alter table public.challenges enable row level security;
+create table if not exists public.challenge_participants (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references public.challenges(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  progress numeric not null default 0,
+  rank integer,
+  invited_by_trainer boolean not null default false,
+  constraint challenge_participants_unique unique (challenge_id, user_id)
+);
 
--- Trainer can read their own challenges
+create table if not exists public.challenge_rewards (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references public.challenges(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  reward_type text not null check (reward_type in ('badge', 'discount_code', 'tier_reward', 'custom')),
+  badge_name text,
+  discount_code text,
+  discount_value numeric,
+  discount_type text check (discount_type in ('percentage', 'fixed_amount')),
+  redeemed boolean not null default false,
+  redeemed_at timestamptz,
+  tier_level integer,
+  description text,
+  created_at timestamptz not null default now()
+);
+
+-- ─── 2. RLS enable ─────────────────────────────────────────────────────────
+
+alter table public.challenges enable row level security;
+alter table public.challenge_participants enable row level security;
+alter table public.challenge_rewards enable row level security;
+
+-- ─── 3. Challenges policies ────────────────────────────────────────────────
+
 drop policy if exists "Trainers can read own challenges" on public.challenges;
 create policy "Trainers can read own challenges"
   on public.challenges for select
@@ -46,7 +82,6 @@ create policy "Trainers can read own challenges"
     )
   );
 
--- Only trainers can create challenges
 drop policy if exists "Trainers can create challenges" on public.challenges;
 create policy "Trainers can create challenges"
   on public.challenges for insert
@@ -63,27 +98,13 @@ create policy "Trainers can create challenges"
 -- in the future, add an update_challenge_details RPC.
 drop policy if exists "Trainers can update own challenges" on public.challenges;
 
--- Trainers can delete their own challenges (only if upcoming)
 drop policy if exists "Trainers can delete own challenges" on public.challenges;
 create policy "Trainers can delete own challenges"
   on public.challenges for delete
   using (creator_id = auth.uid() and status = 'upcoming');
 
--- 2. Challenge participants table
-create table if not exists public.challenge_participants (
-  id uuid primary key default gen_random_uuid(),
-  challenge_id uuid not null references public.challenges(id) on delete cascade,
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  joined_at timestamptz not null default now(),
-  progress numeric not null default 0,
-  rank integer,
-  invited_by_trainer boolean not null default false,
-  constraint challenge_participants_unique unique (challenge_id, user_id)
-);
+-- ─── 4. Challenge participants policies ────────────────────────────────────
 
-alter table public.challenge_participants enable row level security;
-
--- Participants and the challenge creator can read participants
 drop policy if exists "Read challenge participants" on public.challenge_participants;
 create policy "Read challenge participants"
   on public.challenge_participants for select
@@ -101,7 +122,6 @@ create policy "Read challenge participants"
     )
   );
 
--- Trainer can insert participants (invited) or client can self-join
 drop policy if exists "Join challenges" on public.challenge_participants;
 create policy "Join challenges"
   on public.challenge_participants for insert
@@ -142,26 +162,8 @@ create policy "Join challenges"
 -- Updates happen via SECURITY DEFINER RPCs: complete_challenge and update_custom_progress.
 drop policy if exists "Trainer updates participant progress" on public.challenge_participants;
 
--- 3. Challenge rewards table (earned rewards)
-create table if not exists public.challenge_rewards (
-  id uuid primary key default gen_random_uuid(),
-  challenge_id uuid not null references public.challenges(id) on delete cascade,
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  reward_type text not null check (reward_type in ('badge', 'discount_code', 'tier_reward', 'custom')),
-  badge_name text,
-  discount_code text,
-  discount_value numeric,
-  discount_type text check (discount_type in ('percentage', 'fixed_amount')),
-  redeemed boolean not null default false,
-  redeemed_at timestamptz,
-  tier_level integer,
-  description text,
-  created_at timestamptz not null default now()
-);
+-- ─── 5. Challenge rewards policies ─────────────────────────────────────────
 
-alter table public.challenge_rewards enable row level security;
-
--- Users can read their own rewards
 drop policy if exists "Users read own rewards" on public.challenge_rewards;
 create policy "Users read own rewards"
   on public.challenge_rewards for select
