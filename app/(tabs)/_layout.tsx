@@ -86,6 +86,17 @@ export default function TabLayout() {
             }}
           />
 
+          {/* Challenges - both roles */}
+          <Tabs.Screen
+            name="challenges"
+            options={{
+              title: t('tab.challenges'),
+              tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+                <Ionicons name="trophy" size={size} color={color} />
+              ),
+            }}
+          />
+
           {/* Shared */}
           <Tabs.Screen
             name="profile"
