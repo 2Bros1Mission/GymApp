@@ -58,12 +58,10 @@ create policy "Trainers can create challenges"
     )
   );
 
--- Trainers can update their own challenges
+-- No open UPDATE policy on challenges — status transitions handled by
+-- complete_challenge RPC (SECURITY DEFINER). If editable fields are needed
+-- in the future, add an update_challenge_details RPC.
 drop policy if exists "Trainers can update own challenges" on public.challenges;
-create policy "Trainers can update own challenges"
-  on public.challenges for update
-  using (creator_id = auth.uid())
-  with check (creator_id = auth.uid());
 
 -- Trainers can delete their own challenges (only if upcoming)
 drop policy if exists "Trainers can delete own challenges" on public.challenges;
@@ -111,6 +109,7 @@ create policy "Join challenges"
     -- Self-join: user is joining themselves AND is a connected client
     (
       user_id = auth.uid()
+      and invited_by_trainer = false
       and exists (
         select 1 from public.challenges c
         join public.trainer_clients tc on tc.trainer_id = c.creator_id
@@ -536,5 +535,73 @@ begin
   where id = p_reward_id;
 
   return json_build_object('success', true);
+end;
+$$;
+
+-- 9. RPC: Create a challenge with initial participants (atomic)
+create or replace function public.create_challenge(
+  p_title text,
+  p_title_bg text default null,
+  p_description text default null,
+  p_description_bg text default null,
+  p_challenge_type text default 'frequency',
+  p_target_value numeric default 1,
+  p_start_date date default current_date,
+  p_end_date date default (current_date + 30),
+  p_reward_type text default null,
+  p_reward_description text default null,
+  p_reward_tiers jsonb default null,
+  p_discount_value numeric default null,
+  p_discount_type text default null,
+  p_participant_ids uuid[] default '{}'
+)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_challenge_id uuid;
+  v_pid uuid;
+begin
+  -- Verify caller is a trainer
+  if not exists (
+    select 1 from profiles where id = auth.uid() and role = 'trainer'
+  ) then
+    return json_build_object('success', false, 'error', 'not_trainer');
+  end if;
+
+  -- Validate title
+  if char_length(trim(p_title)) = 0 then
+    return json_build_object('success', false, 'error', 'empty_title');
+  end if;
+
+  -- Insert challenge
+  insert into challenges (
+    creator_id, title, title_bg, description, description_bg,
+    challenge_type, target_value, start_date, end_date,
+    reward_type, reward_description, reward_tiers,
+    discount_value, discount_type
+  ) values (
+    auth.uid(), p_title, p_title_bg, p_description, p_description_bg,
+    p_challenge_type, p_target_value, p_start_date, p_end_date,
+    p_reward_type, p_reward_description, p_reward_tiers,
+    p_discount_value, p_discount_type
+  ) returning id into v_challenge_id;
+
+  -- Insert participants (all verified as connected clients)
+  foreach v_pid in array p_participant_ids
+  loop
+    if exists (
+      select 1 from trainer_clients
+      where trainer_id = auth.uid() and client_id = v_pid and status = 'active'
+    ) then
+      insert into challenge_participants (challenge_id, user_id, invited_by_trainer)
+      values (v_challenge_id, v_pid, true)
+      on conflict do nothing;
+    end if;
+  end loop;
+
+  return json_build_object('success', true, 'id', v_challenge_id);
 end;
 $$;

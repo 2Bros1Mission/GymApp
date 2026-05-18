@@ -206,6 +206,9 @@ export default function CreateChallengeScreen() {
           rewardDescription: rewardDescription.trim() || undefined,
           discountValue: rewardType === 'discount' && discountValue ? parseFloat(discountValue) : undefined,
           discountType: rewardType === 'discount' ? discountType : undefined,
+          rewardTiers: rewardType === 'battle_pass' && battlePassTiers.trim()
+            ? JSON.parse(battlePassTiers.trim())
+            : undefined,
           participantIds: selectedClients,
         });
         if (result.error) {
@@ -231,6 +234,7 @@ export default function CreateChallengeScreen() {
     rewardDescription,
     discountValue,
     discountType,
+    battlePassTiers,
     selectedClients,
     guardAction,
     router,

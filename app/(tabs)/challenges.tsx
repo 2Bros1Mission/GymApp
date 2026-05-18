@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -239,13 +239,13 @@ export default function ChallengesScreen() {
       guardAction(async () => {
         const result = await joinChallenge(challengeId, userId);
         if (result.error) {
-          // Error handled by service
+          Alert.alert(t('common.error'), result.error);
           return;
         }
         retry();
       });
     },
-    [userId, guardAction, retry],
+    [userId, guardAction, retry, t],
   );
 
   const handleDelete = useCallback(

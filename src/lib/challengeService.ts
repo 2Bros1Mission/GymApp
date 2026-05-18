@@ -11,7 +11,7 @@ import type {
   DiscountType,
   BattlePassTier,
 } from '../types';
-import type { Json } from '../types/database';
+
 
 // ─── Mappers ────────────────────────────────────────────────────────────────
 
@@ -100,45 +100,27 @@ export async function createChallenge(params: {
   discountType?: DiscountType;
   participantIds: string[];
 }): Promise<{ id?: string; error?: string }> {
-  // Insert challenge
-  const { data, error } = await supabase
-    .from('challenges')
-    .insert({
-      creator_id: params.creatorId,
-      title: params.title,
-      title_bg: params.titleBg ?? null,
-      description: params.description ?? null,
-      description_bg: params.descriptionBg ?? null,
-      challenge_type: params.challengeType,
-      target_value: params.targetValue,
-      start_date: params.startDate,
-      end_date: params.endDate,
-      reward_type: params.rewardType ?? null,
-      reward_description: params.rewardDescription ?? null,
-      reward_tiers: (params.rewardTiers as unknown as Json) ?? null,
-      discount_value: params.discountValue ?? null,
-      discount_type: params.discountType ?? null,
-    })
-    .select('id')
-    .single();
+  const { data, error } = await supabase.rpc('create_challenge', {
+    p_title: params.title,
+    p_title_bg: params.titleBg ?? null,
+    p_description: params.description ?? null,
+    p_description_bg: params.descriptionBg ?? null,
+    p_challenge_type: params.challengeType,
+    p_target_value: params.targetValue,
+    p_start_date: params.startDate,
+    p_end_date: params.endDate,
+    p_reward_type: params.rewardType ?? null,
+    p_reward_description: params.rewardDescription ?? null,
+    p_reward_tiers: (params.rewardTiers ?? null) as unknown as undefined,
+    p_discount_value: params.discountValue ?? null,
+    p_discount_type: params.discountType ?? null,
+    p_participant_ids: params.participantIds,
+  });
 
   if (error) return { error: error.message };
-  const challengeId = data.id;
-
-  // Insert initial participants
-  if (params.participantIds.length > 0) {
-    const rows = params.participantIds.map((uid) => ({
-      challenge_id: challengeId,
-      user_id: uid,
-      invited_by_trainer: true,
-    }));
-    const { error: pError } = await supabase
-      .from('challenge_participants')
-      .insert(rows);
-    if (pError) return { id: challengeId, error: pError.message };
-  }
-
-  return { id: challengeId };
+  const result = data as unknown as { success: boolean; id?: string; error?: string };
+  if (!result?.success) return { error: result?.error ?? 'create_failed' };
+  return { id: result.id };
 }
 
 export async function deleteChallenge(challengeId: string): Promise<{ error?: string }> {
@@ -237,7 +219,8 @@ export async function completeChallenge(challengeId: string): Promise<{ success:
 
   if (error) return { success: false, error: error.message };
   const result = data as unknown as { success: boolean; error?: string };
-  return result;
+  if (!result?.success) return { success: false, error: result?.error ?? 'complete_failed' };
+  return { success: true };
 }
 
 // ─── Rewards ────────────────────────────────────────────────────────────────
@@ -299,4 +282,8 @@ export function subscribeToChallengeUpdates(
     .subscribe();
 
   return channel;
+}
+
+export function unsubscribeFromChannel(channel: RealtimeChannel): void {
+  supabase.removeChannel(channel);
 }

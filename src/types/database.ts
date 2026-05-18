@@ -887,6 +887,25 @@ export type Database = {
         Args: { p_reward_id: string }
         Returns: Json
       }
+      create_challenge: {
+        Args: {
+          p_title: string
+          p_title_bg?: string | null
+          p_description?: string | null
+          p_description_bg?: string | null
+          p_challenge_type?: string
+          p_target_value?: number
+          p_start_date?: string
+          p_end_date?: string
+          p_reward_type?: string | null
+          p_reward_description?: string | null
+          p_reward_tiers?: Json | null
+          p_discount_value?: number | null
+          p_discount_type?: string | null
+          p_participant_ids?: string[]
+        }
+        Returns: Json
+      }
       get_recent_client_activity: {
         Args: { p_trainer_id: string; p_limit?: number }
         Returns: {

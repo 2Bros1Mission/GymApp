@@ -21,7 +21,6 @@ import { useAsyncData } from '../src/hooks/useAsyncData';
 import { useOfflineGuard } from '../src/hooks/useOfflineGuard';
 import { ErrorCard } from '../src/components/ErrorCard';
 import { CelebrationModal } from '../src/components/CelebrationModal';
-import { supabase } from '../src/lib/supabase';
 import {
   getChallengeDetail,
   getChallengeLeaderboard,
@@ -30,6 +29,7 @@ import {
   updateCustomProgress,
   getParticipants,
   subscribeToChallengeUpdates,
+  unsubscribeFromChannel,
   getIssuedDiscountCodes,
   getEarnedRewards,
 } from '../src/lib/challengeService';
@@ -159,7 +159,7 @@ export default function ChallengeDetailScreen() {
     });
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribeFromChannel(channel);
     };
   }, [id, challenge?.status, refreshLeaderboard]);
 
