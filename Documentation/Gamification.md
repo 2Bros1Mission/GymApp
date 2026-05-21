@@ -364,8 +364,76 @@ _Deferred to Topic 29 (Badges and trophies)._
 
 ## Topics To Discuss (Second Group — new from our review)
 
-### Topic 20: Challenge discovery mechanic
-_Pool size, rotation rules, pick limits, cooldown behavior, what happens when a daily/weekly/monthly expires mid-progress._
+### Topic 20: Challenge discovery mechanic (DECIDED)
+
+**Approach: Fixed pool sizes, pick limits, 1h cooldown on new slot, blurred states with countdown timers, paused challenges on limit reached.**
+
+#### Discovery Pool
+
+| Cadence | Challenges visible in pool | Replenish rule |
+|---------|---------------------------|----------------|
+| Daily | 3 | When one is picked, a new one appears after 1h (blurred with countdown) |
+| Weekly | 3 | Same — 1h cooldown per picked slot |
+| Monthly | 5 | Same — 1h cooldown per picked slot |
+
+#### Active Limits (how many can be in My Challenges at once)
+
+| Cadence | Active at a time |
+|---------|-----------------|
+| Daily | 1 |
+| Weekly | 3 |
+| Monthly | 5 |
+
+#### Completion Limits (total completions per period)
+
+| Cadence | Max completions per period |
+|---------|---------------------------|
+| Daily | 1 per day |
+| Weekly | 5 per week |
+| Monthly | 10 per month |
+
+#### Discovery Card States
+
+| State | Visual | Interaction |
+|-------|--------|-------------|
+| Available to pick | Normal card, tappable | Opens detail → Accept |
+| 1h cooldown (slot just freed) | Blurred, not tappable | Bubble: "Available in XX:XX" (1h countdown) |
+| Period limit reached | Blurred, not tappable | Bubble: "Available in X time" (countdown to next reset) |
+
+#### My Challenges Card States
+
+| State | Visual | Interaction |
+|-------|--------|-------------|
+| Active, in progress | Normal card with progress bar + timer bubble | Full interaction |
+| Paused (period completion limit reached) | Blurred | Bubble: "Available after [reset time]" |
+
+#### Period Resets
+
+| Cadence | When | What happens |
+|---------|------|--------------|
+| Daily | Every day at 4AM (Europe/Sofia) | Active daily challenge progress resets to 0. Completion count resets. |
+| Weekly | Every Monday at 4AM | All weekly challenges progress resets to 0. Completion count resets. Paused challenges become active. |
+| Monthly | 1st of each month at 4AM | All monthly challenges progress resets to 0. Completion count resets. Paused challenges become active. |
+
+Monthly reset uses `date_trunc('month', now()) + interval '1 month'` — handles variable month lengths automatically.
+
+#### Challenge Persistence
+
+| Rule | Detail |
+|------|--------|
+| Expiry | **No expiry** — challenges stay in My Challenges until completed or user gives up |
+| Give up | User can abandon any active challenge, no penalty |
+| Pre-filling | User can pick challenges before the period resets (fill all slots). On reset, they wake up with fresh progress ready to go. |
+| Progress on reset | **Always resets to 0** when a new period starts (fairness) |
+
+#### Example Flow (Weekly)
+
+1. User picks 3 weekly challenges (max active at a time)
+2. Completes 2 → picks 2 more from Discovery (now has 3 active again)
+3. Completes 3 more → that's 5 total for the week (limit reached)
+4. Remaining active challenge in My Challenges gets **paused** (blurred, "Available after Monday 4AM")
+5. Monday 4AM: progress resets to 0, challenge becomes active again, completion count resets
+6. User can now complete up to 5 more this week
 
 ### Topic 21: Limits and cadence
 _How many daily/weekly/monthly slots, how many the user can pick, refresh timing._
