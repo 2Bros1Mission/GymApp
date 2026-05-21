@@ -594,10 +594,10 @@ _Stripe Connect, real coupon codes, auto-apply at checkout, webhook confirmation
 ### Topic 33: Future — Multi-provider abstraction (v3)
 _PaymentProvider interface, adapter pattern, provider column on rewards._
 
-### Topic 34: Profile rank history display
+### Topic 34: Profile rank history display — DEFERRED TO v2
 _How monthly rank/points history is shown on the user's profile. Layout, navigation, data granularity._
 
-### Topic 35: Hall of Fame
+### Topic 35: Hall of Fame — DEFERRED TO v2
 _Where it lives, how many months shown, visual design, relationship to leaderboard tab._
 
 ---
