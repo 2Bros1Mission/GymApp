@@ -211,7 +211,6 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 | Badges | Auto-created row in `challenge_rewards` for all completers |
 | Discount codes | Format and flow — separate topic (Topic 28) |
 | Battle pass tiers | Tier rewards generated for each milestone reached during the challenge |
-| Custom text | Stored as-is from trainer's input at challenge creation |
 
 ### Topic 7: Celebration & Animation (DECIDED)
 
@@ -293,8 +292,16 @@ Three text-only toggle buttons at the top of the screen (no icons, just labels):
 - Current user highlighted in the list (if within top 100)
 - Top 10 users get confetti animation on visit (tiered per Topic 7)
 
-### Topic 9-12: Reward System (v1)
-_Badges/Trophies, Discount codes, Battle pass tiers, Custom reward text._
+### Topic 9-12: Reward System (v1) (DECIDED — Scope Only)
+
+**Deferred details, scoped what's in/out for v1.**
+
+| Reward Type | Status | Where discussed |
+|-------------|--------|-----------------|
+| Badges/Trophies | **In v1** — details deferred | Topic 29 |
+| Discount codes | **In v1** — details deferred | Topic 28 |
+| Battle pass tiers | **In v1** — details deferred | Topic 30 |
+| Custom reward text | **Removed** — not implementing | — |
 
 ### Topic 13-17: Screens (v1)
 _Challenges list, Challenge detail, Create challenge form, Celebration modal, Profile badges._
@@ -332,6 +339,12 @@ _Exact point values for each challenge type, rank bonuses, difficulty multiplier
 
 ### Topic 28: Discount codes and reward details
 _Code format, generation mechanism, redemption flow, expiry, trainer vs platform reward differences._
+
+### Topic 29: Badges and trophies
+_Where they display, rarity tiers, platform vs trainer badges, design/naming._
+
+### Topic 30: Battle pass tiers
+_How many tiers, milestone definitions, rewards per tier, who defines them (platform vs trainer)._
 
 ---
 
