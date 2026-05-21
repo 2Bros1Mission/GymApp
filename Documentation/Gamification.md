@@ -303,8 +303,53 @@ Three text-only toggle buttons at the top of the screen (no icons, just labels):
 | Battle pass tiers | **In v1** — details deferred | Topic 30 |
 | Custom reward text | **Removed** — not implementing | — |
 
-### Topic 13-17: Screens (v1)
-_Challenges list, Challenge detail, Create challenge form, Celebration modal, Profile badges._
+### Topic 13: Challenge detail & list screens (DECIDED)
+
+**Approach: Discovery has tap-to-detail with accept button. My Challenges shows full info inline (no drill-down).**
+
+#### Discovery View (list)
+
+| Element | Detail |
+|---------|--------|
+| Card content | Title only (minimal) |
+| Grouping | Daily / Weekly / Monthly sections |
+| Tap behavior | Opens detail screen |
+| No type indicator | User doesn't see "Streak" / "Frequency" / "Custom" labels |
+
+#### Discovery Detail Screen (after tap)
+
+| Element | Detail |
+|---------|--------|
+| Title | Challenge name |
+| Description | Optional — shown if the challenge has one |
+| Remaining time | Live countdown timer (daily: counts down from 24h starting at 4AM; weekly: from 7d starting Monday 4AM; monthly: from end of month 4AM) |
+| Action | "Accept" button to start the challenge |
+| After accept | Challenge moves to My Challenges |
+
+#### My Challenges View (list — no drill-down)
+
+All info visible directly on the card, no tap-to-detail needed:
+
+| Element | Position |
+|---------|----------|
+| Title | Top |
+| Description | Below title |
+| Progress bar | Below description (e.g., "2/5 workouts") |
+| Mark as complete button | Below progress bar (only for self-reported challenges) |
+| Remaining time | Small bubble, bottom-right corner |
+
+#### Progress Tracking per Challenge Type
+
+| Challenge type | How progress updates |
+|----------------|---------------------|
+| Auto-tracked (workout-based) | System updates via trigger on `workout_logs` — no user action |
+| Self-reported (e.g., "drink 2L water") | User taps "Mark as complete" button |
+| Which challenges need which | Determined at challenge creation (deferred to challenge creation topic) |
+
+#### Streak Reset Behavior
+
+- Progress bar silently resets to 0/N when streak is broken
+- No explicit "Streak broken" indicator (for now — see Topic 31)
 
 ### Topic 18-19: Future (v2/v3)
 _Stripe integration, Multi-provider abstraction._
@@ -345,6 +390,9 @@ _Where they display, rarity tiers, platform vs trainer badges, design/naming._
 
 ### Topic 30: Battle pass tiers
 _How many tiers, milestone definitions, rewards per tier, who defines them (platform vs trainer)._
+
+### Topic 31: Streak reset UX
+_Whether to show explicit "streak broken" indicator, notification, or keep silent reset._
 
 ---
 
