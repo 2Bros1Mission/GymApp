@@ -516,8 +516,58 @@ The leaderboard is driven exclusively by platform challenge completions. Points 
 
 At 10-20k+ users, the reset at 4AM is two bulk UPDATEs + one archive INSERT — completes in under a second. No need to stagger timing.
 
-### Topic 24: Trainer challenge lifecycle (includes Topic 14: Create challenge form)
-_Pre-defined blocks trainers assemble from, creation form, assignment UX, client rejection flow, trainer visibility._
+### Topic 24: Trainer challenge lifecycle (DECIDED) (includes Topic 14: Create challenge form)
+
+**Approach: Block-based builder with saveable templates, multi-assign with per-client customization, auto-accepted with give-up option, full trainer visibility, deadline required.**
+
+#### Challenge Creation (Block Builder)
+
+Trainers construct challenges by filling parameters into block structures:
+
+| Block Type | Structure | Progress Tracking |
+|------------|-----------|-------------------|
+| Frequency | "Do **[X]** **[workout type]** workouts in **[X]** days" | Auto-tracked from `workout_logs` |
+| Streak | "Maintain a streak of **[X]** consecutive days" | Auto-tracked from `workout_logs` |
+| Custom | Trainer writes free-text goal | **Manual** — client has "Mark as done" button |
+
+#### Templates
+
+| Decision | Choice |
+|----------|--------|
+| Save as template | Trainer can save any built challenge as a reusable template |
+| Assign from template | Trainer picks a saved template, then edits parameters before confirming |
+| Editable on assign | Duration, time, workout type, target value — anything in the block is customizable per client |
+
+#### Assignment Model
+
+| Decision | Choice |
+|----------|--------|
+| Who assigns | Trainer selects specific clients |
+| Multi-assign | **Yes** — trainer can select multiple clients at once |
+| Per-client customization | Before confirming, trainer can tweak parameters for each client individually |
+| Client discovery | No — only assigned clients see trainer challenges (not discoverable by others) |
+
+#### Client Response
+
+| Decision | Choice |
+|----------|--------|
+| Accept/reject | **Auto-accepted** — challenge appears in client's My Challenges immediately |
+| Give up | Client can give up at any time, no penalty (same as platform challenges) |
+
+#### Trainer Visibility
+
+| Decision | Choice |
+|----------|--------|
+| Progress view | **Full visibility** — progress bars, completion times, rankings among assigned clients |
+| Dashboard | Trainer sees all their assigned challenges with each client's progress |
+
+#### Deadline & Points
+
+| Decision | Choice |
+|----------|--------|
+| Deadline | **Required** — trainer must set start/end date |
+| Points | **Zero** — no leaderboard points, no rewards, no recognition |
+| Purpose | Purely a trainer-client accountability tool |
 
 ### Topic 25: Workout categories
 _Adding categories to the system so frequency challenges can target specific muscle groups._
