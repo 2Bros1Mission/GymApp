@@ -351,6 +351,15 @@ All info visible directly on the card, no tap-to-detail needed:
 - Progress bar silently resets to 0/N when streak is broken
 - No explicit "Streak broken" indicator (for now — see Topic 31)
 
+### Topic 14: Create challenge form
+_Merged into Topic 24 (Trainer challenge lifecycle) — covers pre-defined blocks, creation form, assignment UX, client rejection flow._
+
+### Topic 15: Celebration modal
+_Removed — no challenge-completion celebration (see Topic 7). Animation only on leaderboard for top 10._
+
+### Topic 16: Profile badges
+_Deferred to Topic 29 (Badges and trophies)._
+
 ### Topic 18-19: Future (v2/v3)
 _Stripe integration, Multi-provider abstraction._
 
@@ -370,8 +379,8 @@ _What rewards exist, point values, difficulty/rarity tiers._
 ### Topic 23: Leaderboard reset and history
 _Monthly reset, historical standings, seasonal rankings._
 
-### Topic 24: Trainer challenge lifecycle
-_Pre-defined blocks trainers assemble from, assignment UX, client rejection flow, trainer visibility._
+### Topic 24: Trainer challenge lifecycle (includes Topic 14: Create challenge form)
+_Pre-defined blocks trainers assemble from, creation form, assignment UX, client rejection flow, trainer visibility._
 
 ### Topic 25: Workout categories
 _Adding categories to the system so frequency challenges can target specific muscle groups._
