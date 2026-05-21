@@ -118,9 +118,9 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 - **Read cost for leaderboard:** Static snapshot table. No computation on read.
 - **Streak cost:** Computed once per workout log via trigger, not on every screen open.
 
-### Topic 4: Enrollment Model (DECIDED)
+### Topic 4: Enrollment Model & Visibility (DECIDED)
 
-**No self-join. No enrollment mechanic.**
+**No self-join. No enrollment mechanic. Strict visibility boundaries.**
 
 | Decision | Choice |
 |----------|--------|
@@ -128,11 +128,42 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 | Trainer challenges | Trainer assigns to specific client(s). Auto-assigned, client can reject/cancel. No opt-in from other clients. |
 | Trainers as users | Trainers can complete platform challenges and earn leaderboard points like any other user. |
 | Self-join | **Does not exist.** Removed from design. |
+| Challenge history | **No completed challenges tab.** User sees only in-progress challenges + discovery pool. |
 
-This replaces Georgi's original "trainer selects initial participants + other clients can discover and join" model entirely.
+#### Visibility Rules
 
-### Topic 5: Real-time leaderboard
-_Computed rankings via RPC, live updates via Supabase Realtime._
+| Actor | Can see |
+|-------|---------|
+| User X | Their own in-progress challenges (platform + trainer-assigned) |
+| User X | Discovery pool (available platform challenges to pick from) |
+| User X | Their own points and rank (even if not in top 100) |
+| User X | Top 100 leaderboard (names + points) |
+| User X | **Cannot** see User Z's challenges, progress, or points (unless Z is in top 100) |
+| User X | **Cannot** enroll in challenges assigned to other users |
+| Trainer Y | Challenges created by them, assigned to their own clients |
+| Trainer Y | Their own platform challenges (as a user) |
+| Trainer Y | **Cannot** see client's platform challenges (only trainer-assigned ones) |
+| Trainer Y | **Cannot** see challenges created by other trainers |
+| Trainer Y | **Cannot** see challenges for users who are not their clients |
+
+#### Leaderboard Identity
+
+- Shows the user's `name` from `profiles` (whatever they entered — no real name requirement)
+- No anonymization — names are public on the top 100
+- Trainers appear on the leaderboard like any other user
+
+### Topic 5: Real-time Updates (DECIDED)
+
+**No real-time / Supabase Realtime for the challenge system. Everything is pull-based.**
+
+| Aspect | Approach |
+|--------|----------|
+| Global leaderboard | Cached snapshot, refreshes every 30-60 min. No live updates. |
+| User's own challenge progress | Updated by trigger on `workout_logs` INSERT. UI refreshes on screen focus (`useFocusAsyncData` pattern). |
+| Other users' progress | Not visible at all (visibility rules above). Not applicable. |
+| Realtime channels | **Not used.** No WebSocket subscriptions for challenges. |
+
+**Rationale:** Chat needs instant delivery (messages). Challenges don't — seeing progress update on screen focus and leaderboard update within 30-60 min is sufficient. Removes significant complexity (no channel management, no broadcast triggers).
 
 ### Topic 6: Challenge completion with rewards
 _`complete_challenge` RPC that assigns ranks and generates rewards._
