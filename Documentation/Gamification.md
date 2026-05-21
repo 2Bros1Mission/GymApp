@@ -360,9 +360,6 @@ _Removed — no challenge-completion celebration (see Topic 7). Animation only o
 ### Topic 16: Profile badges
 _Deferred to Topic 29 (Badges and trophies)._
 
-### Topic 18-19: Future (v2/v3)
-_Stripe integration, Multi-provider abstraction._
-
 ---
 
 ## Topics To Discuss (Second Group — new from our review)
@@ -402,6 +399,12 @@ _How many tiers, milestone definitions, rewards per tier, who defines them (plat
 
 ### Topic 31: Streak reset UX
 _Whether to show explicit "streak broken" indicator, notification, or keep silent reset._
+
+### Topic 32: Future — Stripe integration (v2)
+_Stripe Connect, real coupon codes, auto-apply at checkout, webhook confirmation._
+
+### Topic 33: Future — Multi-provider abstraction (v3)
+_PaymentProvider interface, adapter pattern, provider column on rewards._
 
 ---
 
