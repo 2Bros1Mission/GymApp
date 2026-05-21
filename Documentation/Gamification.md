@@ -255,8 +255,43 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 | Rewards earned | **Not shown on leaderboard** (for now) |
 | Share button | **None** (v1) |
 
-### Topic 8: New "Challenges" tab
-_5th tab in the app navigation (for both trainer and client views)._
+### Topic 8: New "Challenges" tab (DECIDED)
+
+**Approach: 5th tab visible to all users. Three sub-views with text toggle. Default: My Challenges.**
+
+#### Tab Visibility
+
+| Decision | Choice |
+|----------|--------|
+| Who sees the tab | **Everyone** — all users (trainers and clients are both users) |
+| Tab position | 5th tab alongside Dashboard, Messages, Profile |
+| Tab icon | **Trophy** (`trophy` / `trophy-outline` from Ionicons) |
+| Default view on tap | **My Challenges** (always) |
+
+#### Sub-view Navigation
+
+Three text-only toggle buttons at the top of the screen (no icons, just labels):
+
+| Sub-view | Content |
+|----------|---------|
+| Discovery | Available platform challenges to pick from (daily/weekly/monthly pool) |
+| My Challenges | User's active challenges (platform + trainer-assigned) |
+| Leaderboard | Top 3 podium + list of #4–100 + user's own rank highlighted |
+
+#### Role-specific Content
+
+| Role | Discovery | My Challenges | Leaderboard |
+|------|-----------|---------------|-------------|
+| Client | Platform challenges pool | Active platform + trainer-assigned | Same for all |
+| Trainer (as user) | Same platform challenges pool | Their own active platform challenges | Same for all |
+| Trainer (management) | — | Also shows challenges they assigned to clients | — |
+
+#### Leaderboard Sub-view (recap from Topic 7)
+
+- Top 3: podium visual
+- #4–100: standard list
+- Current user highlighted in the list (if within top 100)
+- Top 10 users get confetti animation on visit (tiered per Topic 7)
 
 ### Topic 9-12: Reward System (v1)
 _Badges/Trophies, Discount codes, Battle pass tiers, Custom reward text._
