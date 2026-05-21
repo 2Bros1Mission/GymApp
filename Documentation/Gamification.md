@@ -484,8 +484,37 @@ _All limits and cadence decisions captured in Topic 20: pool sizes (3/3/5), acti
 
 The leaderboard is driven exclusively by platform challenge completions. Points per challenge are a design decision made when creating content, not a system-wide formula. Difficulty adds variety to the pool and scales rewards, but the user has no control over which difficulty they receive.
 
-### Topic 23: Leaderboard reset and history
-_Monthly reset, historical standings, seasonal rankings._
+### Topic 23: Leaderboard reset and history (DECIDED)
+
+**Approach: Full monthly reset at 4AM on the 1st, user's own historical rank stored per month, no all-time leaderboard.**
+
+#### Monthly Reset
+
+| Decision | Choice |
+|----------|--------|
+| Reset timing | **1st of each month at 4AM** (Europe/Sofia) — aligned with challenge period resets |
+| What resets | `profiles.leaderboard_points` → 0 for all users |
+| Method | pg_cron bulk UPDATE (single statement, milliseconds even at 100k users) |
+| All-time leaderboard | **No** — fresh start every month |
+
+#### Historical Standings
+
+| Decision | Choice |
+|----------|--------|
+| What's stored | User's own final rank + points for each month (archived before reset) |
+| Full leaderboard archive | No — only user's own position per month |
+| Where visible | User's profile (details in Topic 34) |
+
+#### Winner Recognition
+
+| Decision | Choice |
+|----------|--------|
+| Monthly winner badge | **Yes** — auto-awarded, details in Topic 29 |
+| Hall of Fame | **Yes** — details in Topic 35 |
+
+#### Load Spike (Non-issue)
+
+At 10-20k+ users, the reset at 4AM is two bulk UPDATEs + one archive INSERT — completes in under a second. No need to stagger timing.
 
 ### Topic 24: Trainer challenge lifecycle (includes Topic 14: Create challenge form)
 _Pre-defined blocks trainers assemble from, creation form, assignment UX, client rejection flow, trainer visibility._
@@ -514,6 +543,12 @@ _Stripe Connect, real coupon codes, auto-apply at checkout, webhook confirmation
 
 ### Topic 33: Future — Multi-provider abstraction (v3)
 _PaymentProvider interface, adapter pattern, provider column on rewards._
+
+### Topic 34: Profile rank history display
+_How monthly rank/points history is shown on the user's profile. Layout, navigation, data granularity._
+
+### Topic 35: Hall of Fame
+_Where it lives, how many months shown, visual design, relationship to leaderboard tab._
 
 ---
 
