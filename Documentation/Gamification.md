@@ -70,8 +70,53 @@ Three types, all available in v1:
 
 ## Topics To Discuss (First Group — from Georgi's design)
 
-### Topic 3: Auto-tracked progress
-_Computed from `workout_logs` for frequency/streak types. How the RPC works, streak SQL approach, day boundary handling._
+### Topic 3: Auto-tracked Progress (DECIDED)
+
+**Approach: Hybrid — cached progress, updated by triggers, leaderboard on a schedule.**
+
+#### Progress Tracking
+
+| Mechanism | How |
+|-----------|-----|
+| `current_progress` column on `challenge_participants` | Cached value, updated by a Postgres trigger on `workout_logs` INSERT |
+| Trigger scope | Fires for the user who logged the workout; updates only their active challenges (3-5 rows typical) |
+| Frequency calculation | Simple COUNT of `workout_logs` rows in the challenge period (optionally filtered by category) |
+| Streak calculation | Postgres function using gaps-and-islands on `gym_date`, called by the trigger |
+
+#### 4AM Day Boundary
+
+A **stored generated column** on `workout_logs`:
+
+```sql
+ALTER TABLE workout_logs ADD COLUMN gym_date date
+  GENERATED ALWAYS AS (
+    (date_trunc('day', created_at AT TIME ZONE 'Europe/Sofia' - INTERVAL '4 hours'))::date
+  ) STORED;
+
+CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
+```
+
+- Computed once on INSERT, never recalculated
+- Streak queries use `gym_date` directly — no runtime timezone math
+- Indexed for fast lookups
+
+#### Leaderboard
+
+| Decision | Choice |
+|----------|--------|
+| What it shows | Top 100 users by points + the current user's own rank |
+| Storage | `leaderboard_snapshot` table (top 100 cached) |
+| Refresh cadence | Every 30–60 minutes via pg_cron or scheduled Edge Function |
+| Points source | `profiles.leaderboard_points` column (updated on challenge completion) |
+| User's own rank | On-demand query: `SELECT COUNT(*) FROM profiles WHERE leaderboard_points > $my_points` |
+| Monthly reset | Scheduled function zeros all `leaderboard_points`, optionally archives to `leaderboard_history` |
+
+#### Why This Works at Scale (10k+ users)
+
+- **Write cost per workout:** Trigger updates 3-5 rows in `challenge_participants`. Cheap.
+- **Read cost for challenge detail:** Pre-computed `current_progress`. O(1) per participant.
+- **Read cost for leaderboard:** Static snapshot table. No computation on read.
+- **Streak cost:** Computed once per workout log via trigger, not on every screen open.
 
 ### Topic 4: Self-join enrollment
 _Connected clients can discover and join trainer's challenges on their own._
