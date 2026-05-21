@@ -118,8 +118,18 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 - **Read cost for leaderboard:** Static snapshot table. No computation on read.
 - **Streak cost:** Computed once per workout log via trigger, not on every screen open.
 
-### Topic 4: Self-join enrollment
-_Connected clients can discover and join trainer's challenges on their own._
+### Topic 4: Enrollment Model (DECIDED)
+
+**No self-join. No enrollment mechanic.**
+
+| Decision | Choice |
+|----------|--------|
+| Platform challenges | Available to ALL users (including trainers). User picks from discovery pool. No joining — you pick it, it's active. |
+| Trainer challenges | Trainer assigns to specific client(s). Auto-assigned, client can reject/cancel. No opt-in from other clients. |
+| Trainers as users | Trainers can complete platform challenges and earn leaderboard points like any other user. |
+| Self-join | **Does not exist.** Removed from design. |
+
+This replaces Georgi's original "trainer selects initial participants + other clients can discover and join" model entirely.
 
 ### Topic 5: Real-time leaderboard
 _Computed rankings via RPC, live updates via Supabase Realtime._
