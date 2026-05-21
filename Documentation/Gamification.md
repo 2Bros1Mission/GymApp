@@ -292,15 +292,15 @@ Three text-only toggle buttons at the top of the screen (no icons, just labels):
 - Current user highlighted in the list (if within top 100)
 - Top 10 users get confetti animation on visit (tiered per Topic 7)
 
-### Topic 9-12: Reward System (v1) (DECIDED — Scope Only)
+### Topic 9-12: Reward System (DECIDED — Scope Only)
 
-**Deferred details, scoped what's in/out for v1.**
+**All reward types deferred to v2.**
 
 | Reward Type | Status | Where discussed |
 |-------------|--------|-----------------|
-| Badges/Trophies | **In v1** — details deferred | Topic 29 |
-| Discount codes | **In v1** — details deferred | Topic 28 |
-| Battle pass tiers | **In v1** — details deferred | Topic 30 |
+| Badges/Trophies | **Deferred to v2** | Topic 29 |
+| Discount codes | **Deferred to v2** | Topic 28 |
+| Battle pass tiers | **Deferred to v2** | Topic 30 |
 | Custom reward text | **Removed** — not implementing | — |
 
 ### Topic 13: Challenge detail & list screens (DECIDED)
@@ -576,13 +576,13 @@ _Adding categories to the system so frequency challenges can target specific mus
 
 ### ~~Topic 27: Points per challenge type and difficulty~~ → Merged into Topic 22
 
-### Topic 28: Discount codes and reward details
+### Topic 28: Discount codes and reward details — DEFERRED TO v2
 _Code format, generation mechanism, redemption flow, expiry, trainer vs platform reward differences._
 
-### Topic 29: Badges and trophies
+### Topic 29: Badges and trophies — DEFERRED TO v2
 _Where they display, rarity tiers, platform vs trainer badges, design/naming._
 
-### Topic 30: Battle pass tiers
+### Topic 30: Battle pass tiers — DEFERRED TO v2
 _How many tiers, milestone definitions, rewards per tier, who defines them (platform vs trainer)._
 
 ### Topic 31: Streak reset UX
