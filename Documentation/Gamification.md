@@ -435,8 +435,8 @@ Monthly reset uses `date_trunc('month', now()) + interval '1 month'` — handles
 5. Monday 4AM: progress resets to 0, challenge becomes active again, completion count resets
 6. User can now complete up to 5 more this week
 
-### Topic 21: Limits and cadence
-_How many daily/weekly/monthly slots, how many the user can pick, refresh timing._
+### Topic 21: Limits and cadence (DECIDED — covered by Topic 20)
+_All limits and cadence decisions captured in Topic 20: pool sizes (3/3/5), active limits (1/3/5), completion limits (1/5/10), 1h cooldown, period resets at 4AM._
 
 ### Topic 22: Points, scoring, and reward tiers (merged with Topics 26 & 27)
 _Point values per challenge type, difficulty multipliers, rank bonuses, reduced points for custom/self-reported, reward rarity tiers._
@@ -450,11 +450,9 @@ _Pre-defined blocks trainers assemble from, creation form, assignment UX, client
 ### Topic 25: Workout categories
 _Adding categories to the system so frequency challenges can target specific muscle groups._
 
-### Topic 26: Points and scoring
-_Merged into Topic 22._
+### ~~Topic 26: Points and scoring~~ → Merged into Topic 22
 
-### Topic 27: Points per challenge type and difficulty
-_Merged into Topic 22._
+### ~~Topic 27: Points per challenge type and difficulty~~ → Merged into Topic 22
 
 ### Topic 28: Discount codes and reward details
 _Code format, generation mechanism, redemption flow, expiry, trainer vs platform reward differences._
