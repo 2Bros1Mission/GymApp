@@ -450,8 +450,39 @@ Once the completion limit is reached (1/1 daily, 5/5 weekly, 10/10 monthly), **a
 ### Topic 21: Limits and cadence (DECIDED — covered by Topic 20)
 _All limits and cadence decisions captured in Topic 20: pool sizes (3/3/5), active limits (1/3/5), completion limits (1/5/10), 1h cooldown, period resets at 4AM._
 
-### Topic 22: Points, scoring, and reward tiers (merged with Topics 26 & 27)
-_Point values per challenge type, difficulty multipliers, rank bonuses, reduced points for custom/self-reported, reward rarity tiers._
+### Topic 22: Points, scoring, and reward tiers (DECIDED) (merged with Topics 26 & 27)
+
+**Approach: 3 difficulty tiers per challenge, points set per challenge at creation time, no bonuses, trainer challenges give no points.**
+
+#### Difficulty System
+
+| Decision | Choice |
+|----------|--------|
+| Difficulty levels | **3 tiers**: Easy, Medium, Hard |
+| How user gets difficulty | **Random from pool** — user does NOT choose. Each challenge template generates 3 variants in the pool. |
+| Pool impact | Content pool is 3x larger (each concept × 3 difficulties). User still sees 3/3/5 cards in Discovery — random difficulty draws. |
+| If user dislikes difficulty | Give up (no penalty), wait for 1h cooldown, get a new random draw |
+
+#### Point Values
+
+| Decision | Choice |
+|----------|--------|
+| Base points per challenge | **Set individually at challenge creation time** — no fixed formula per cadence |
+| Difficulty multiplier | Yes — harder variant of same challenge gives more points (exact multiplier set per challenge) |
+| Who defines points | Platform admin when creating challenge templates |
+
+#### What Gives NO Points
+
+| Scenario | Points |
+|----------|--------|
+| Trainer-assigned challenges | **0 pts** — leaderboard is purely platform-driven |
+| Partial progress (period resets before completion) | **0 pts** — only completion counts (Topic 6) |
+| Rank/position bonus (first to complete) | **None** — everyone who completes gets the same |
+| Streak bonus | **None** — streak is a separate mechanic (Topic 31) |
+
+#### Summary
+
+The leaderboard is driven exclusively by platform challenge completions. Points per challenge are a design decision made when creating content, not a system-wide formula. Difficulty adds variety to the pool and scales rewards, but the user has no control over which difficulty they receive.
 
 ### Topic 23: Leaderboard reset and history
 _Monthly reset, historical standings, seasonal rankings._
