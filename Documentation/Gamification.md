@@ -426,14 +426,26 @@ Monthly reset uses `date_trunc('month', now()) + interval '1 month'` — handles
 | Pre-filling | User can pick challenges before the period resets (fill all slots). On reset, they wake up with fresh progress ready to go. |
 | Progress on reset | **Always resets to 0** when a new period starts (fairness) |
 
+#### Hard Freeze on Completion Limit
+
+Once the completion limit is reached (1/1 daily, 5/5 weekly, 10/10 monthly), **all remaining active challenges of that cadence hard-freeze**:
+
+- No progress is counted — even if the user performs the exact activity the challenge requires, it does NOT increment
+- Newly picked challenges of that cadence also get zero progress until reset
+- This is a **backend enforcement**, not just UI — the trigger on `workout_logs` skips progress updates for frozen challenges
+- Applies equally to challenges that were mid-progress and freshly picked ones
+
+**Example:** User has weekly challenge 1 (50% done) and challenge 2. They complete challenge 2 → that's 5/5 for the week. Challenge 1 freezes at 50% — workouts done between now and Monday 4AM won't count toward it. On Monday reset, progress resets to 0 and tracking resumes.
+
 #### Example Flow (Weekly)
 
 1. User picks 3 weekly challenges (max active at a time)
 2. Completes 2 → picks 2 more from Discovery (now has 3 active again)
 3. Completes 3 more → that's 5 total for the week (limit reached)
 4. Remaining active challenge in My Challenges gets **paused** (blurred, "Available after Monday 4AM")
-5. Monday 4AM: progress resets to 0, challenge becomes active again, completion count resets
-6. User can now complete up to 5 more this week
+5. All progress tracking stops for weekly challenges — workouts don't count
+6. Monday 4AM: progress resets to 0, challenge becomes active again, completion count resets
+7. User can now complete up to 5 more this week
 
 ### Topic 21: Limits and cadence (DECIDED — covered by Topic 20)
 _All limits and cadence decisions captured in Topic 20: pool sizes (3/3/5), active limits (1/3/5), completion limits (1/5/10), 1h cooldown, period resets at 4AM._
