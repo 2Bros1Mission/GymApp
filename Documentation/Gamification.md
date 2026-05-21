@@ -194,7 +194,7 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 | Final tiebreaker | `user_id ASC` (deterministic, handles same-second completions) |
 | No shared ranks | Every participant gets a unique rank — ties are impossible |
 
-**`completed_at` tracking:** When the trigger on `workout_logs` updates `current_progress` and detects `current_progress >= target_value`, it also sets `challenge_participants.completed_at = now()`. This timestamp is the tiebreaker.
+**`completed_at` tracking:** When the trigger on `workout_logs` updates `current_progress` and detects `current_progress >= target_value`, it also sets `challenge_participants.completed_at = now()`. This timestamp is the tiebreaker. Same-second completions resolved by `user_id ASC` (arbitrary but deterministic — accepted edge case, not worth solving further).
 
 #### Points Allocation
 
@@ -213,8 +213,47 @@ CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
 | Battle pass tiers | Tier rewards generated for each milestone reached during the challenge |
 | Custom text | Stored as-is from trainer's input at challenge creation |
 
-### Topic 7: Celebration screen
-_Confetti/animation, winner highlight, final standings._
+### Topic 7: Celebration & Animation (DECIDED)
+
+**Approach: Leaderboard-only animation for top 10, no challenge-completion celebration screen.**
+
+#### Where Animation Appears
+
+| Location | Animation? |
+|----------|-----------|
+| Leaderboard screen (top 10 user viewing) | **Yes** — confetti on every visit while in top 10 |
+| Challenge completion | **No** — no celebration modal, no confetti |
+| Anywhere else | **No** — leaderboard only |
+
+#### Animation Tiers
+
+| Rank | Animation Level |
+|------|----------------|
+| #1 | Largest/best confetti animation |
+| #2–3 | Slightly smaller animation |
+| #4–7 | Medium animation |
+| #8–10 | Smallest animation |
+| #11–100 | No animation |
+
+#### Behavior
+
+| Rule | Detail |
+|------|--------|
+| Trigger | Every time the user opens/navigates to the leaderboard |
+| Condition | User's current rank is within top 10 |
+| Dynamic | If user drops from top 9 to top 13, animation stops appearing |
+| Library | `react-native-confetti-cannon` |
+| Persistence | Not a one-time event — shows on every leaderboard visit while in top 10 |
+
+#### Leaderboard Layout
+
+| Section | Content |
+|---------|---------|
+| Top (podium) | Top 3 users displayed as a podium (visual prominence) |
+| Below podium | List of ranks #4–100 (standard list layout) |
+| User's own rank | Always visible (even if outside top 100, shown at bottom) |
+| Rewards earned | **Not shown on leaderboard** (for now) |
+| Share button | **None** (v1) |
 
 ### Topic 8: New "Challenges" tab
 _5th tab in the app navigation (for both trainer and client views)._
