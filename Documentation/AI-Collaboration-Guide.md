@@ -57,13 +57,6 @@ Claude documents:
 Move to next topic.
 ```
 
-### 5. Maintain a Living PR
-
-All decisions get captured in a single design document (`Documentation/Gamification.md`), on a dedicated branch with an open PR. This means:
-- Georgi can see decisions as they're made
-- The PR diff shows exactly what was added per topic
-- Easy to review and comment asynchronously
-
 ---
 
 ## Key Principles
