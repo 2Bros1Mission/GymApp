@@ -53,7 +53,7 @@ end $$;
 
 -- 4. Add gym_date generated column to workout_logs
 -- 4AM Sofia day boundary: workouts from 4:00AM today to 3:59AM tomorrow
--- map to today's date. Computed once on INSERT, never recalculated.
+-- map to today's date. Stored on write; stable because created_at is immutable.
 -- Example: 2026-06-15 03:30 Sofia time → gym_date = 2026-06-14
 do $$ begin
   alter table public.workout_logs
