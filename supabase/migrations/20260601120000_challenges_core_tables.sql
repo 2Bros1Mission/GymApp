@@ -58,7 +58,9 @@ create table if not exists public.challenges (
   constraint challenges_trainer_zero_points
     check (source = 'platform' or points = 0),
   constraint challenges_date_sanity
-    check (end_date is null or end_date > start_date)
+    check (end_date is null or end_date > start_date),
+  constraint challenges_one_time_trainer_only
+    check (cadence != 'one_time' or source = 'trainer')
 );
 
 alter table public.challenges enable row level security;
@@ -95,7 +97,8 @@ create table if not exists public.user_challenge_state (
   completions_this_period integer not null default 0,
   period_start date not null,
   last_pick_at timestamptz,
-  recent_template_ids uuid[] default '{}',
+  recent_template_ids uuid[] not null default '{}',
+  created_at timestamptz not null default now(),
   unique (user_id, cadence)
 );
 
