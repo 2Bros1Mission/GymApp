@@ -11,10 +11,10 @@
 create table if not exists public.leaderboard_snapshot (
   id uuid default gen_random_uuid() primary key,
   user_id uuid not null references public.profiles on delete cascade,
-  rank integer not null,
+  rank integer not null check (rank > 0),
   points integer not null,
   user_name text not null,
-  refreshed_at timestamptz not null
+  refreshed_at timestamptz not null default now()
 );
 
 alter table public.leaderboard_snapshot enable row level security;
@@ -26,8 +26,8 @@ alter table public.leaderboard_snapshot enable row level security;
 create table if not exists public.leaderboard_history (
   id uuid default gen_random_uuid() primary key,
   user_id uuid not null references public.profiles on delete cascade,
-  month date not null,
-  final_rank integer not null,
+  month date not null check (extract(day from month) = 1),
+  final_rank integer not null check (final_rank > 0),
   final_points integer not null,
   user_name text not null,
   created_at timestamptz not null default now(),
@@ -58,7 +58,7 @@ end $$;
 do $$ begin
   alter table public.workout_logs
     add column gym_date date generated always as (
-      (date_trunc('day', created_at at time zone 'Europe/Sofia' - interval '4 hours'))::date
+      (date_trunc('day', (created_at at time zone 'Europe/Sofia') - interval '4 hours'))::date
     ) stored;
 exception when duplicate_column then null;
 end $$;
@@ -70,7 +70,7 @@ create index if not exists idx_workout_logs_gym_date
 
 -- Leaderboard ranking
 create index if not exists idx_profiles_leaderboard_points
-  on public.profiles (leaderboard_points desc);
+  on public.profiles (leaderboard_points desc, leaderboard_points_updated_at asc);
 
 -- Active challenge lookups (partial index — hot path)
 create index if not exists idx_challenge_participants_active
