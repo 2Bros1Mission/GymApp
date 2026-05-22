@@ -79,7 +79,7 @@ RLS: enabled, no policies.
 
 ### 3. `challenge_participants` — Enrollment + Progress
 
-One row per user per challenge. Progress is cached here and updated by the workout_logs trigger (#133).
+One row per user per challenge. Progress is cached here and updated by the progress-tracking trigger (#133).
 
 | Column | Type | Constraints |
 |--------|------|-------------|
