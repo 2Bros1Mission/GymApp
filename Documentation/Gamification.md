@@ -43,9 +43,9 @@ Three types, all available in v1:
 
 - "Work out X consecutive days"
 - **Day boundary:** 4:00 AM to 4:00 AM Bulgarian time (EET/EEST)
-- **Streak reset:** If broken, progress resets to 0 but user can restart within the same challenge period
+- **Streak reset:** If broken, progress resets to 0 immediately at 4AM. User can restart within the same challenge period.
+- **No backfill** — if they miss a day, it resets. No retroactive logging.
 - **Weekly/monthly only** — no daily streak challenges
-- **Backfill:** Accepted within the challenge period (user forgot to log)
 - Auto-tracked from `workout_logs`
 - Example: "Maintain a 5-day workout streak this month"
 
@@ -585,8 +585,44 @@ _Where they display, rarity tiers, platform vs trainer badges, design/naming._
 ### Topic 30: Battle pass tiers — DEFERRED TO v2
 _How many tiers, milestone definitions, rewards per tier, who defines them (platform vs trainer)._
 
-### Topic 31: Streak reset UX
-_Whether to show explicit "streak broken" indicator, notification, or keep silent reset._
+### Topic 31: Streak reset UX (DECIDED)
+
+**Approach: "The Comeback Card" — turn streak breaks into a game mechanic, not a punishment.**
+
+#### Streak Card States
+
+| State | Visual | Trigger |
+|-------|--------|---------|
+| Normal (active) | Progress bar filled (e.g., "4/7 days"), standard styling | Streak is progressing |
+| Broken (reset to 0) | Restart icon on card, message: "Day 0 — Restart your streak", "Best: X days" shown | 4AM passes with no workout logged previous day |
+| Comeback moment | Inline checkmark animation + "Back on track!" text | `current_progress` reaches `longest_streak` value again |
+
+#### Longest Streak Tracking
+
+| Decision | Choice |
+|----------|--------|
+| Storage | `longest_streak` column on `challenge_participants` |
+| Updated when | `current_progress > longest_streak` |
+| Display | Subtle text below progress bar: "Best: X days" |
+| Persists | Across resets within the same challenge period |
+
+#### Comeback Moment
+
+| Decision | Choice |
+|----------|--------|
+| Trigger | User's current streak reaches their previous longest streak for that challenge |
+| Visual | Small inline animation: checkmark + "Back on track!" |
+| Frequency | Once per streak attempt — doesn't fire again until next break + recovery |
+
+#### What's NOT Included
+
+| Excluded | Reason |
+|----------|--------|
+| Push notifications for streak breaks | No guilt/spam |
+| Modals or popups | Non-intrusive philosophy |
+| Red/warning colors | Comeback framing is neutral-to-positive |
+| Streak freeze / skip day | Not implementing — miss = reset |
+| Backfill | No retroactive logging allowed |
 
 ### Topic 32: Future — Stripe integration (v2)
 _Stripe Connect, real coupon codes, auto-apply at checkout, webhook confirmation._
