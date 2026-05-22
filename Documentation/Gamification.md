@@ -691,3 +691,510 @@ See `Documentation/issue-28-challenges-design-draft.md` for the initial brainsto
 - Trainer challenges don't award leaderboard points
 - Discovery/rotation mechanic for platform challenges (not in original)
 - Pre-defined blocks for trainer challenge creation (not free-form)
+
+---
+
+## Implementation Structure Plan
+
+> Everything below consolidates all decided topics into a sequenced implementation blueprint.
+> This is what gets broken into PRs after Georgi reviews.
+
+---
+
+### Phase 1: Database Schema & Infrastructure
+
+#### 1.1 Migration: Core Tables
+
+File: `supabase/migrations/20260XXX120000_challenges.sql`
+
+**Table: `challenge_templates`** (platform challenge library)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK, `gen_random_uuid()` |
+| `title` | text | NOT NULL |
+| `title_bg` | text | Bulgarian translation |
+| `description` | text | nullable |
+| `description_bg` | text | nullable |
+| `challenge_type` | text | `frequency`, `streak`, `custom_auto`, `custom_self_reported` |
+| `cadence` | text | `daily`, `weekly`, `monthly` |
+| `difficulty` | text | `easy`, `medium`, `hard` |
+| `target_value` | integer | NOT NULL (e.g., 3 workouts, 5-day streak) |
+| `points` | integer | NOT NULL — awarded on completion |
+| `category` | text | nullable — workout category filter (Topic 25) |
+| `template_group` | text | NOT NULL — groups the 3 difficulty variants together |
+| `active` | boolean | default true — allows deactivating without deletion |
+| `created_at` | timestamptz | default `now()` |
+
+**Table: `challenges`** (active challenge instances)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `template_id` | uuid | nullable FK → `challenge_templates` (null for trainer challenges) |
+| `creator_id` | uuid | FK → `profiles` (trainer for trainer-created, null/system for platform) |
+| `source` | text | `platform` or `trainer` |
+| `title` | text | NOT NULL |
+| `title_bg` | text | nullable |
+| `description` | text | nullable |
+| `description_bg` | text | nullable |
+| `challenge_type` | text | `frequency`, `streak`, `custom_auto`, `custom_self_reported` |
+| `cadence` | text | `daily`, `weekly`, `monthly` |
+| `difficulty` | text | `easy`, `medium`, `hard` (null for trainer challenges) |
+| `target_value` | integer | NOT NULL |
+| `points` | integer | NOT NULL (0 for trainer challenges) |
+| `category` | text | nullable — workout category filter |
+| `start_date` | date | NOT NULL |
+| `end_date` | date | nullable (null for platform challenges — they don't expire) |
+| `status` | text | `active`, `completed`, `expired` |
+| `created_at` | timestamptz | default `now()` |
+
+**Table: `challenge_participants`** (user enrollment + progress)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `challenge_id` | uuid | FK → `challenges` |
+| `user_id` | uuid | FK → `profiles` |
+| `current_progress` | integer | default 0 — cached, updated by trigger |
+| `longest_streak` | integer | default 0 — max streak achieved (for streak type) |
+| `target_value` | integer | NOT NULL — copied from challenge (for per-client customization) |
+| `status` | text | `active`, `completed`, `paused`, `abandoned` |
+| `joined_at` | timestamptz | default `now()` |
+| `completed_at` | timestamptz | nullable — set when `current_progress >= target_value` |
+| `rank` | integer | nullable — set on challenge completion |
+| `source` | text | `discovery`, `trainer_assigned` |
+| `created_at` | timestamptz | default `now()` |
+
+**Table: `user_challenge_state`** (discovery/completion tracking per user)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → `profiles` |
+| `cadence` | text | `daily`, `weekly`, `monthly` |
+| `completions_this_period` | integer | default 0 |
+| `period_start` | date | NOT NULL — current period start date |
+| `last_pick_at` | timestamptz | nullable — for 1h cooldown calculation |
+| `recent_template_ids` | uuid[] | last 10 picked template IDs (for anti-repetition) |
+
+**Table: `trainer_challenge_templates`** (saved trainer blocks)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `trainer_id` | uuid | FK → `profiles` |
+| `title` | text | NOT NULL |
+| `challenge_type` | text | `frequency`, `streak`, `custom` |
+| `target_value` | integer | NOT NULL |
+| `category` | text | nullable |
+| `description` | text | nullable |
+| `created_at` | timestamptz | default `now()` |
+
+**Table: `leaderboard_snapshot`** (cached top 100)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → `profiles` |
+| `rank` | integer | NOT NULL |
+| `points` | integer | NOT NULL |
+| `user_name` | text | NOT NULL — denormalized for fast reads |
+| `refreshed_at` | timestamptz | NOT NULL |
+
+**Table: `leaderboard_history`** (monthly archives)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → `profiles` |
+| `month` | date | 1st of the month (e.g., `2026-06-01`) |
+| `final_rank` | integer | NOT NULL |
+| `final_points` | integer | NOT NULL |
+| `created_at` | timestamptz | default `now()` |
+
+#### 1.2 Migration: Columns on Existing Tables
+
+**`profiles` table additions:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `leaderboard_points` | integer | default 0 |
+| `leaderboard_points_updated_at` | timestamptz | default `now()` |
+
+**`workout_logs` table additions:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `gym_date` | date | GENERATED ALWAYS AS stored (4AM boundary formula) |
+
+**Indexes:**
+
+```sql
+CREATE INDEX idx_workout_logs_gym_date ON workout_logs(user_id, gym_date);
+CREATE INDEX idx_profiles_leaderboard_points ON profiles(leaderboard_points DESC);
+CREATE INDEX idx_challenge_participants_active ON challenge_participants(user_id, status) WHERE status = 'active';
+CREATE INDEX idx_challenge_participants_challenge ON challenge_participants(challenge_id, status);
+CREATE INDEX idx_challenges_status ON challenges(status, cadence);
+CREATE INDEX idx_user_challenge_state ON user_challenge_state(user_id, cadence);
+```
+
+#### 1.3 Migration: RLS Policies
+
+| Table | Policy | Rule |
+|-------|--------|------|
+| `challenge_templates` | SELECT | All authenticated users |
+| `challenges` | SELECT | Participants can read their own + trainers read their created ones |
+| `challenges` | INSERT | Trainers only (source = 'trainer') |
+| `challenge_participants` | SELECT | Own rows + trainer sees their assigned clients |
+| `challenge_participants` | INSERT | Own user_id only (for discovery picks) |
+| `challenge_participants` | UPDATE | Own rows (for abandon/self-report) |
+| `user_challenge_state` | SELECT/UPDATE | Own rows only |
+| `trainer_challenge_templates` | ALL | Own rows only (trainer_id = auth.uid()) |
+| `leaderboard_snapshot` | SELECT | All authenticated users |
+| `leaderboard_history` | SELECT | Own rows only |
+
+#### 1.4 Postgres Functions & Triggers
+
+**Trigger: `trg_workout_log_challenge_progress`** (on `workout_logs` INSERT)
+
+Responsibilities:
+1. Find all `active` challenge_participants for the user
+2. Skip challenges that are frozen (user's `completions_this_period >= limit` for that cadence)
+3. For frequency challenges: increment `current_progress` if workout matches category (or any workout if no category)
+4. For streak challenges: recalculate streak using gaps-and-islands on `gym_date`
+5. Update `longest_streak` if `current_progress > longest_streak`
+6. If `current_progress >= target_value`: set `completed_at = now()`, update `user_challenge_state.completions_this_period`
+
+**Function: `calculate_streak(p_user_id uuid, p_challenge_id uuid)`**
+
+- Queries `workout_logs` for the user within the challenge period
+- Uses gaps-and-islands on `gym_date` to find current consecutive day count
+- Returns integer (current streak length)
+
+**Function: `refresh_leaderboard_snapshot()`** (called by pg_cron)
+
+- Truncates `leaderboard_snapshot`
+- Inserts top 100 from `profiles` ordered by `leaderboard_points DESC, leaderboard_points_updated_at ASC, name ASC`
+- Updates `refreshed_at`
+
+**Function: `complete_expired_challenges()`** (called by pg_cron, hourly)
+
+- Finds challenges where `end_date < now()` AND `status = 'active'` (trainer challenges only — platform challenges don't expire)
+- Assigns ranks per `current_progress DESC, completed_at ASC, user_id ASC`
+- Sets `challenges.status = 'completed'`
+
+**Function: `reset_daily_challenges()`** (called by pg_cron, daily at 4AM Sofia)
+
+- Resets `current_progress = 0` for all active daily challenge participants
+- Resets `user_challenge_state.completions_this_period = 0` WHERE `cadence = 'daily'`
+- Updates `period_start` to today's gym_date
+
+**Function: `reset_weekly_challenges()`** (called by pg_cron, Monday 4AM Sofia)
+
+- Same as daily but for weekly cadence
+- Unpauses paused weekly challenges (`status = 'paused'` → `'active'`)
+
+**Function: `reset_monthly_challenges()`** (called by pg_cron, 1st of month 4AM Sofia)
+
+- Same pattern for monthly cadence
+- Also runs the leaderboard monthly reset:
+  - Archives each user's rank/points to `leaderboard_history`
+  - Zeros `profiles.leaderboard_points` for all users
+  - Resets `leaderboard_snapshot`
+
+#### 1.5 pg_cron Jobs
+
+| Job | Schedule | Function |
+|-----|----------|----------|
+| Leaderboard refresh | Every 30 min | `refresh_leaderboard_snapshot()` |
+| Challenge expiry | Every hour | `complete_expired_challenges()` |
+| Daily reset | `0 1 * * *` (4AM Sofia = 1AM UTC in summer) | `reset_daily_challenges()` |
+| Weekly reset | `0 1 * * 1` (Monday 4AM Sofia) | `reset_weekly_challenges()` |
+| Monthly reset | `0 1 1 * *` (1st of month 4AM Sofia) | `reset_monthly_challenges()` |
+
+> Note: UTC offset for Sofia changes between winter (UTC+2) and summer (UTC+3). The cron times must be set to the current UTC equivalent of 4AM Sofia, or use a timezone-aware scheduler.
+
+---
+
+### Phase 2: Service Layer
+
+File: `src/lib/challengeService.ts`
+
+#### 2.1 Discovery Functions
+
+| Function | Purpose |
+|----------|---------|
+| `getDiscoveryPool(userId, cadence)` | Returns available challenges for the discovery view (respects anti-repetition, cooldown, limits) |
+| `pickChallenge(userId, challengeTemplateId)` | User picks a challenge from discovery → creates `challenge_participants` row |
+| `getUserChallengeState(userId)` | Returns completion counts, cooldown status, active counts per cadence |
+
+#### 2.2 My Challenges Functions
+
+| Function | Purpose |
+|----------|---------|
+| `getActiveChallenges(userId)` | Returns all active challenges (platform + trainer) with progress |
+| `abandonChallenge(userId, challengeParticipantId)` | User gives up on a challenge |
+| `reportProgress(userId, challengeParticipantId)` | Self-reported challenges: increment progress by 1 |
+
+#### 2.3 Leaderboard Functions
+
+| Function | Purpose |
+|----------|---------|
+| `getLeaderboard()` | Returns top 100 from snapshot table |
+| `getUserRank(userId)` | Returns user's current rank + points (even if outside top 100) |
+| `getLeaderboardHistory(userId)` | Returns user's monthly rank history |
+
+#### 2.4 Trainer Functions
+
+| Function | Purpose |
+|----------|---------|
+| `createTrainerChallenge(trainerId, params, clientIds[])` | Creates challenge + participant rows for each client |
+| `getTrainerChallenges(trainerId)` | All challenges created by trainer with client progress |
+| `getTrainerTemplates(trainerId)` | Saved block templates |
+| `saveTrainerTemplate(trainerId, params)` | Save a challenge block as reusable template |
+| `deleteTrainerTemplate(trainerId, templateId)` | Remove a saved template |
+
+---
+
+### Phase 3: TypeScript Types
+
+File: `src/types/index.ts` (additions)
+
+```typescript
+// Challenge template (platform library)
+interface ChallengeTemplate {
+  id: string;
+  title: string;
+  titleBg: string | null;
+  description: string | null;
+  descriptionBg: string | null;
+  challengeType: 'frequency' | 'streak' | 'custom_auto' | 'custom_self_reported';
+  cadence: 'daily' | 'weekly' | 'monthly';
+  difficulty: 'easy' | 'medium' | 'hard';
+  targetValue: number;
+  points: number;
+  category: string | null;
+  templateGroup: string;
+}
+
+// Active challenge instance
+interface Challenge {
+  id: string;
+  templateId: string | null;
+  source: 'platform' | 'trainer';
+  title: string;
+  titleBg: string | null;
+  description: string | null;
+  descriptionBg: string | null;
+  challengeType: 'frequency' | 'streak' | 'custom_auto' | 'custom_self_reported';
+  cadence: 'daily' | 'weekly' | 'monthly';
+  difficulty: 'easy' | 'medium' | 'hard' | null;
+  targetValue: number;
+  points: number;
+  category: string | null;
+  status: 'active' | 'completed' | 'expired';
+  startDate: string;
+  endDate: string | null;
+}
+
+// User's participation in a challenge
+interface ChallengeParticipant {
+  id: string;
+  challengeId: string;
+  userId: string;
+  currentProgress: number;
+  longestStreak: number;
+  targetValue: number;
+  status: 'active' | 'completed' | 'paused' | 'abandoned';
+  completedAt: string | null;
+  source: 'discovery' | 'trainer_assigned';
+  challenge: Challenge; // joined
+}
+
+// Discovery pool card
+interface DiscoveryCard {
+  challenge: Challenge;
+  state: 'available' | 'cooldown' | 'limit_reached';
+  availableAt: string | null; // ISO timestamp when available (for cooldown/limit countdown)
+}
+
+// User challenge state (limits/cooldowns)
+interface UserChallengeState {
+  cadence: 'daily' | 'weekly' | 'monthly';
+  completionsThisPeriod: number;
+  maxCompletions: number; // 1, 5, or 10
+  activeCount: number;
+  maxActive: number; // 1, 3, or 5
+  lastPickAt: string | null;
+  cooldownEndsAt: string | null; // computed: lastPickAt + 1h
+}
+
+// Leaderboard entry
+interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  userName: string;
+  points: number;
+}
+
+// Trainer challenge template (saved block)
+interface TrainerChallengeTemplate {
+  id: string;
+  trainerId: string;
+  title: string;
+  challengeType: 'frequency' | 'streak' | 'custom';
+  targetValue: number;
+  category: string | null;
+  description: string | null;
+}
+```
+
+---
+
+### Phase 4: UI Screens & Components
+
+#### 4.1 Tab Navigation Update
+
+File: `app/(tabs)/_layout.tsx`
+
+- Add 5th tab: **Challenges**
+- Icon: `trophy-outline` / `trophy` (Ionicons)
+- Route: `app/(tabs)/challenges.tsx`
+
+#### 4.2 Challenges Tab Screen
+
+File: `app/(tabs)/challenges.tsx`
+
+- Three-way text toggle at top: **Discovery** | **My Challenges** | **Leaderboard**
+- Default sub-view on tab tap: **My Challenges**
+- Each sub-view is a section within the same screen (conditional render, not separate routes)
+
+#### 4.3 Discovery Sub-view
+
+Component location: inline in challenges tab or `src/components/challenges/DiscoveryView.tsx`
+
+- Three sections: Daily / Weekly / Monthly
+- Each section shows pool cards (3/3/5)
+- Card states: available (tappable), cooldown (blurred + countdown), limit reached (blurred + countdown)
+- Tap on available card → navigate to detail screen
+
+#### 4.4 Challenge Detail Screen
+
+File: `app/challenge-detail.tsx`
+
+- Shows: title, description, remaining time countdown, difficulty badge
+- "Accept" button → calls `pickChallenge()` → navigates back to My Challenges
+- Only accessible from Discovery (not from My Challenges — those show inline)
+
+#### 4.5 My Challenges Sub-view
+
+Component location: inline in challenges tab or `src/components/challenges/MyChallengesView.tsx`
+
+- FlatList of active challenges (platform + trainer mixed)
+- Each card shows inline: title, description, progress bar, remaining time bubble
+- Self-reported challenges: "Mark as done" button on card
+- Streak challenges in broken state: Comeback Card UI (restart icon, "Day 0 — Restart your streak", "Best: X days")
+- Paused challenges: blurred with "Available after [reset time]" bubble
+- Swipe or long-press for "Give up" action
+
+#### 4.6 Leaderboard Sub-view
+
+Component location: inline in challenges tab or `src/components/challenges/LeaderboardView.tsx`
+
+- Top 3: podium visual (cards with rank #1 center/elevated, #2 left, #3 right)
+- #4–100: standard FlatList
+- Current user highlighted (different background color) even if outside top 100
+- User's own rank always visible at bottom if not in top 100
+- Top 10 users: confetti animation on view mount (tiered per Topic 7)
+- Library: `react-native-confetti-cannon`
+
+#### 4.7 Trainer Challenge Builder
+
+File: `app/challenge-builder.tsx`
+
+- Block selection: Frequency / Streak / Custom
+- Parameter inputs per block type:
+  - Frequency: workout count, category dropdown, duration (days)
+  - Streak: consecutive days target
+  - Custom: free-text description
+- Client multi-select picker
+- Per-client customization step (optional — can tweak target per client)
+- Start date + end date pickers
+- "Save as template" toggle
+- "Assign" button → calls `createTrainerChallenge()`
+
+#### 4.8 Trainer Challenge Management
+
+File: within `app/(tabs)/dashboard.tsx` or separate `app/trainer-challenges.tsx`
+
+- List of all trainer-created challenges
+- Each shows: title, assigned clients, progress per client
+- Client progress: name + progress bar + completion status
+- Expired/completed challenges shown separately
+
+---
+
+### Phase 5: Scheduled Jobs & Background Logic
+
+| Job | Implementation | Cadence |
+|-----|----------------|---------|
+| Leaderboard snapshot refresh | Supabase pg_cron → `refresh_leaderboard_snapshot()` | Every 30 min |
+| Challenge expiry check | Supabase pg_cron → `complete_expired_challenges()` | Every hour |
+| Daily period reset | Supabase pg_cron → `reset_daily_challenges()` | Daily 4AM Sofia |
+| Weekly period reset | Supabase pg_cron → `reset_weekly_challenges()` | Monday 4AM Sofia |
+| Monthly full reset | Supabase pg_cron → `reset_monthly_challenges()` | 1st of month 4AM Sofia |
+
+---
+
+### Phase 6: i18n Strings
+
+File: `src/constants/translations.ts` (additions)
+
+Required key groups:
+- `challenges.discovery` — "Discovery", pool section headers, cooldown text, limit text
+- `challenges.myChallenges` — "My Challenges", progress labels, give up confirmation
+- `challenges.leaderboard` — "Leaderboard", rank labels, monthly reset notice
+- `challenges.detail` — "Accept", remaining time format, difficulty labels
+- `challenges.streak` — "Day X", "Restart your streak", "Best: X days", "Back on track!"
+- `challenges.trainer` — builder labels, template save, assign button, progress view
+- `challenges.states` — "Available in...", "Paused", "Completed", "Abandoned"
+- `tab.challenges` — tab label
+
+All strings in EN + BG.
+
+---
+
+### Phase 7: Implementation Sequence (Suggested PR Order)
+
+| # | PR Scope | Depends On |
+|---|----------|------------|
+| 1 | Database migration: all tables, columns, indexes | — |
+| 2 | RLS policies | PR 1 |
+| 3 | Postgres functions: streak calculation, progress trigger | PR 1 |
+| 4 | Postgres functions: reset functions, leaderboard refresh, challenge expiry | PR 3 |
+| 5 | pg_cron job setup | PR 4 |
+| 6 | TypeScript types | — |
+| 7 | Service layer: discovery functions | PR 1, 6 |
+| 8 | Service layer: my challenges + leaderboard functions | PR 1, 6 |
+| 9 | Service layer: trainer functions | PR 1, 6 |
+| 10 | Tab navigation: add 5th tab (Challenges) | PR 6 |
+| 11 | UI: Discovery sub-view + challenge detail screen | PR 7, 10 |
+| 12 | UI: My Challenges sub-view (including Comeback Card) | PR 8, 10 |
+| 13 | UI: Leaderboard sub-view (including confetti) | PR 8, 10 |
+| 14 | UI: Trainer challenge builder | PR 9, 10 |
+| 15 | UI: Trainer challenge management view | PR 9, 10 |
+| 16 | i18n: all EN + BG strings | PR 11–15 |
+| 17 | Topic 25: Workout categories (prerequisite for category-filtered challenges) | — |
+
+---
+
+### Open Items (Post-Review)
+
+| Item | Needed Before |
+|------|---------------|
+| Topic 25: Workout categories | Content library (v1.2) — category-filtered challenges need this |
+| Challenge content library | v1.2 — actual challenge titles, descriptions, point values |
+| pg_cron timezone handling | PR 5 — determine whether to hardcode UTC offset or use timezone-aware approach |
+| Confetti library evaluation | PR 13 — test `react-native-confetti-cannon` on both iOS/Android |
+| Discovery pool randomization seed | PR 7 — how random draws work (pure random vs. weighted) |
