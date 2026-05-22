@@ -8,7 +8,7 @@
 -- 1. challenge_templates — Platform challenge library
 -- Each concept has 3 difficulty variants grouped by template_group.
 create table if not exists public.challenge_templates (
-  id uuid primary key default gen_random_uuid(),
+  id uuid default gen_random_uuid() primary key,
   title text not null,
   title_bg text,
   description text,
@@ -31,7 +31,7 @@ alter table public.challenge_templates enable row level security;
 -- Display data is denormalized from the template so template edits
 -- don't affect active challenges.
 create table if not exists public.challenges (
-  id uuid primary key default gen_random_uuid(),
+  id uuid default gen_random_uuid() primary key,
   template_id uuid references public.challenge_templates(id) on delete set null,
   creator_id uuid references public.profiles(id) on delete cascade,
   source text not null check (source in ('platform', 'trainer')),
@@ -67,14 +67,14 @@ alter table public.challenges enable row level security;
 
 -- 3. challenge_participants — Enrollment + cached progress
 -- One row per user per challenge. Progress is cached here and
--- updated by the workout_logs trigger (Issue #133).
+-- updated by the progress-tracking trigger (see Issue #133).
 create table if not exists public.challenge_participants (
-  id uuid primary key default gen_random_uuid(),
+  id uuid default gen_random_uuid() primary key,
   challenge_id uuid not null references public.challenges(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   current_progress integer not null default 0,
   longest_streak integer not null default 0,
-  target_value integer not null,
+  target_value integer not null check (target_value > 0),
   status text not null default 'active' check (status in ('active', 'completed', 'paused', 'abandoned')),
   joined_at timestamptz not null default now(),
   completed_at timestamptz,
@@ -87,11 +87,11 @@ create table if not exists public.challenge_participants (
 alter table public.challenge_participants enable row level security;
 
 -- 4. user_challenge_state — Discovery/completion tracking per user per cadence
--- Tracks completions this period, cooldown timer, and recent picks
+-- Tracks completions this period, last pick time (for cooldown), and recent picks
 -- for anti-repetition. No 'one_time' cadence — trainer challenges
 -- don't participate in discovery.
 create table if not exists public.user_challenge_state (
-  id uuid primary key default gen_random_uuid(),
+  id uuid default gen_random_uuid() primary key,
   user_id uuid not null references public.profiles(id) on delete cascade,
   cadence text not null check (cadence in ('daily', 'weekly', 'monthly')),
   completions_this_period integer not null default 0,
@@ -111,7 +111,7 @@ alter table public.user_challenge_state enable row level security;
 -- 'custom' here maps to 'custom_self_reported' when instantiated
 -- as a challenges row.
 create table if not exists public.trainer_challenge_templates (
-  id uuid primary key default gen_random_uuid(),
+  id uuid default gen_random_uuid() primary key,
   trainer_id uuid not null references public.profiles(id) on delete cascade,
   title text not null,
   challenge_type text not null check (challenge_type in ('frequency', 'streak', 'custom')),
