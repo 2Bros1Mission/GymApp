@@ -3,6 +3,8 @@
 -- Adds access control policies to all 7 challenge-related tables.
 -- Tables and RLS were enabled in Issues #128 and #129.
 -- No DELETE policies — challenge data uses status changes instead.
+-- No UPDATE on challenges — status transitions happen in server-side
+-- functions (reset, expiry, completion) that bypass RLS.
 -- ============================================================
 
 -- 1. challenge_templates — Public library, readable by all authenticated users
@@ -31,6 +33,8 @@ create policy "Users read challenges they participate in"
     )
   );
 
+-- Platform challenges are created via discovery RPC (security definer);
+-- only trainer-sourced challenges are insertable via direct client calls.
 create policy "Trainers can create challenges"
   on public.challenges for insert
   to authenticated
@@ -89,6 +93,7 @@ create policy "Trainers manage own templates"
   with check (trainer_id = auth.uid());
 
 -- 6. leaderboard_snapshot — Top 100 readable by all authenticated users
+-- Writes happen via refresh_leaderboard_snapshot() (security definer, Issue #135).
 create policy "Anyone can read leaderboard"
   on public.leaderboard_snapshot for select
   to authenticated
