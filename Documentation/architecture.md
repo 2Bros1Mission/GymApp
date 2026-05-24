@@ -221,6 +221,7 @@ GymApp/
 ├── src/
 │   ├── constants/
 │   │   ├── theme.ts              # Design system tokens
+│   │   ├── responsive.ts         # Breakpoints + container styles
 │   │   └── i18n.ts               # Translation strings + t() function
 │   ├── contexts/
 │   │   ├── AuthContext.tsx        # Global auth state provider
@@ -234,12 +235,21 @@ GymApp/
 │   │   ├── feedbackService.ts    # Workout feedback + detail view
 │   │   ├── goalService.ts        # Client goals + trainer suggestions
 │   │   ├── messageService.ts     # In-app messaging + realtime
-│   │   └── notificationService.ts # Local notification management
+│   │   ├── notificationService.ts # Local notification management
+│   │   ├── confirm.ts            # Platform-aware confirmation dialog
+│   │   └── formatDate.ts         # Date formatting utility
 │   ├── hooks/
 │   │   ├── useAsyncData.ts       # Generic data fetching hook
-│   │   ├── useFocusAsyncData.ts  # Refetch on screen focus
-│   │   └── useOfflineGuard.ts    # Offline action prevention
-│   ├── components/               # Reusable UI components
+│   │   ├── useBreakpoint.ts      # Responsive breakpoint detection
+│   │   ├── useOfflineGuard.ts    # Offline action prevention
+│   │   └── useWorkoutBuilderForm.ts # Custom workout form state
+│   ├── components/
+│   │   ├── ErrorCard.tsx          # Error display with retry button
+│   │   ├── ExerciseFormCard.tsx   # Exercise input card for workout builder
+│   │   ├── OfflineBanner.tsx      # Animated offline indicator
+│   │   ├── ResponsiveContainer.tsx # Width-constrained responsive wrapper
+│   │   ├── Sidebar.tsx            # Desktop navigation sidebar
+│   │   └── SkeletonLoader.tsx     # Animated loading placeholders
 │   ├── data/
 │   │   └── workouts.ts           # Sample workout data
 │   └── types/
@@ -281,7 +291,9 @@ User opens app
 
 ### Tab Bar
 
-4 static tabs using `Ionicons`:
+Role-conditional tabs using `Ionicons`. Tabs are shown/hidden via `href: null` based on `profile.role`:
+
+**Client tabs:**
 
 | Tab | Icon | Screen |
 |-----|------|--------|
@@ -290,13 +302,28 @@ User opens app
 | Progress | `stats-chart` | Analytics + body metrics |
 | Profile | `person` | User settings |
 
+**Trainer tabs:**
+
+| Tab | Icon | Screen |
+|-----|------|--------|
+| Dashboard | `grid` | Trainer dashboard (clients, activity) |
+| Profile | `person` | User settings |
+
 ### Conditional Navigation
 
 The tab layout conditionally renders based on `profile.role`:
 - **Client tabs:** Home, Workouts, Progress, Profile
-- **Trainer tabs:** Dashboard, Clients, Programs, Profile
+- **Trainer tabs:** Dashboard, Profile
 
-The root layout uses a role-based redirect to direct trainers to the dashboard and clients to the home tab.
+Tabs are hidden per role using the `href: null` pattern on `<Tabs.Screen>` options — all screens are defined once but only the relevant ones render in the tab bar.
+
+### Desktop Layout (Responsive)
+
+On the `lg` breakpoint (1024px+), the tab bar is hidden and replaced by a persistent **Sidebar** component (`src/components/Sidebar.tsx`, 240px wide). The sidebar renders role-aware navigation items:
+- **Client:** Home, Workouts, Progress, Messages, Profile
+- **Trainer:** Dashboard, Messages, Profile
+
+The `(tabs)/_layout.tsx` checks `useBreakpoint() === 'lg'` and conditionally renders the Sidebar alongside the content area, setting `tabBarStyle: { display: 'none' }` on desktop.
 
 ## Authentication
 
@@ -523,7 +550,7 @@ Trainer views detailed client progress: workout history, body metrics chart, str
 
 ## Design System
 
-Dark theme with consistent design tokens defined in `src/constants/theme.ts`:
+Dark and light themes with consistent design tokens defined in `src/constants/theme.ts`. The dark theme values are shown below (light theme uses the same token names with adjusted surface/background colors):
 
 ### Colors
 
@@ -558,6 +585,66 @@ xs: 12  |  sm: 14  |  md: 16  |  lg: 18  |  xl: 22  |  xxl: 28  |  xxxl: 34
 ```
 sm: 8  |  md: 12  |  lg: 16  |  xl: 24  |  full: 9999
 ```
+
+### Theming
+
+Both dark and light themes are supported. `ThemeContext` exposes `isDark`, `toggleTheme()`, and a `colors` object (type `ColorPalette`) that all components consume via `useTheme()`. The active theme preference is persisted in AsyncStorage.
+
+## Responsive System
+
+Source: `src/constants/responsive.ts` + `src/hooks/useBreakpoint.ts`
+
+### Breakpoints
+
+| Breakpoint | Width | Description |
+|-----------|-------|-------------|
+| `sm` | 0–639px | Mobile (default) |
+| `md` | 640–1023px | Tablet |
+| `lg` | 1024px+ | Desktop |
+
+### Max Widths
+
+Content is constrained per breakpoint:
+
+| Breakpoint | Max Width |
+|-----------|-----------|
+| `sm` | `100%` |
+| `md` | `720px` |
+| `lg` | `1200px` |
+
+### `useBreakpoint()` Hook
+
+Returns the current breakpoint (`sm`, `md`, or `lg`) based on `useWindowDimensions().width`. Automatically re-renders on window resize.
+
+### `ResponsiveContainer` Component
+
+Wraps screen content with a centered, width-constrained container. All screens should use this for consistent responsive behavior.
+
+```tsx
+<ResponsiveContainer>
+  {/* Content is centered and constrained to breakpoint max-width */}
+</ResponsiveContainer>
+```
+
+### Skeleton Loading
+
+Source: `src/components/SkeletonLoader.tsx`
+
+Provides animated placeholder components shown during loading states. All variants use a pulsing opacity animation:
+
+| Component | Mimics |
+|-----------|--------|
+| `SkeletonBox` | Generic rectangular placeholder (configurable width/height) |
+| `SkeletonStatCard` | Stat card with icon + value + label |
+| `SkeletonWorkoutCard` | Workout list item with avatar + text lines |
+| `SkeletonWeekCalendar` | Weekly calendar row with 7 day circles |
+| `SkeletonHistoryItem` | History list item with dot + text + icon |
+
+## Web Platform Workarounds
+
+### Pointer Events Fix
+
+The root layout (`app/_layout.tsx`) includes `useWebPointerEventsFix()` which injects a CSS rule on web to override react-native-web's incorrect `pointer-events: none` compilation for `pointerEvents: "box-none"` containers. Without this fix, taps on tab bar buttons and pressables are blocked on web.
 
 ## Internationalization (i18n)
 

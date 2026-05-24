@@ -37,15 +37,18 @@ function useAsyncData<T>(options: {
 
 ### useFocusAsyncData\<T\>
 
-Same interface as `useAsyncData` but re-fetches every time the screen gains focus (via React Navigation's `useFocusEffect`).
+Same interface as `useAsyncData` but re-fetches every time the screen gains focus (via expo-router's `useFocusEffect`).
+
+> **Note:** This is not a separate file — screens achieve focus-refetch by calling the `retry()` function from `useAsyncData` inside a `useFocusEffect(useCallback(...))` block.
 
 ```typescript
-function useFocusAsyncData<T>(options: UseAsyncDataOptions<T>): UseAsyncDataReturn<T>
+// Typical usage pattern in a screen:
+const { data, loading, error, retry } = useAsyncData({ fetcher: loadData, defaultValue: [] });
+
+useFocusEffect(useCallback(() => { retry(); }, []));
 ```
 
 **When to use:** For data that should refresh when the user navigates back (e.g., workout history after completing a workout, client list after approving a connection).
-
-**Key difference:** Wraps `execute()` in `useFocusEffect(useCallback(...))` instead of `useEffect`.
 
 ---
 
@@ -269,3 +272,66 @@ For all features except chat, GymApp fetches data on-demand:
 - **On user action:** explicit refetch after mutations (e.g., refresh client list after approving a connection)
 
 This simplifies the architecture for the majority of screens — no subscription management, no connection handling, no conflict resolution. The trade-off is that data is only as fresh as the last screen focus event.
+
+---
+
+## Skeleton Loading Pattern
+
+Source: `src/components/SkeletonLoader.tsx`
+
+During loading states, screens render animated skeleton placeholders instead of blank space or spinners. This provides immediate visual structure and reduces perceived load time.
+
+### Available Skeletons
+
+| Component | Use Case |
+|-----------|----------|
+| `SkeletonBox` | Generic placeholder (configurable width/height/radius) |
+| `SkeletonStatCard` | Dashboard stat cards |
+| `SkeletonWorkoutCard` | Workout list items |
+| `SkeletonWeekCalendar` | Weekly activity calendar |
+| `SkeletonHistoryItem` | History list rows |
+
+### Usage Pattern
+
+```typescript
+const { data, loading, error, retry } = useAsyncData({ fetcher, defaultValue: [] });
+
+if (loading) return <SkeletonWorkoutCard />;
+if (error) return <ErrorCard message={error} onRetry={retry} />;
+return <WorkoutList data={data} />;
+```
+
+All skeletons use a looping opacity animation (0.3 → 0.7 → 0.3, 800ms per cycle) and respect the current theme colors.
+
+---
+
+## Complex Form State: useWorkoutBuilderForm
+
+Source: `src/hooks/useWorkoutBuilderForm.ts`
+
+Manages the full state for the custom workout builder screen, including create and edit modes.
+
+### Interface
+
+```typescript
+function useWorkoutBuilderForm(editId?: string): {
+  // Form fields
+  name, setName, nameBg, setNameBg,
+  description, setDescription, descriptionBg, setDescriptionBg,
+  difficulty, setDifficulty, duration, setDuration,
+  muscleGroups, toggleMuscleGroup,
+  exercises, addExercise, updateExercise, updateExerciseMuscle, removeExercise, moveExercise,
+  isPublic, setIsPublic,
+  // State
+  saving, success, error, loadingExisting, isValid,
+  // Actions
+  handleSave,
+}
+```
+
+### Key Behaviors
+
+- **Edit mode:** When `editId` is provided, loads the existing workout on mount and populates all fields
+- **Validation:** `isValid` requires a name and at least one exercise with a name
+- **Offline guard:** `handleSave` wraps the network call with `useOfflineGuard().guardAction()` — shows an alert instead of attempting save when offline
+- **Optimistic feedback:** Displays success message then navigates back after 800ms delay
