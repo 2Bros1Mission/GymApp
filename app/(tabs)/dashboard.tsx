@@ -92,8 +92,9 @@ export default function TrainerDashboardScreen() {
   const { clients, trainerCode, workouts, recentActivity } = data;
   const displayName = profile?.name || t('home.defaultName');
 
-  const getDifficultyColor = (d: string) =>
-    d === 'beginner' ? colors.success : d === 'intermediate' ? colors.accent : colors.error;
+  const getDifficultyColor = useCallback((d: string) =>
+    d === 'beginner' ? colors.success : d === 'intermediate' ? colors.accent : colors.error,
+  [colors]);
 
   const renderActivityItem = useCallback(({ item: a }: { item: RecentActivity }) => (
     <Pressable

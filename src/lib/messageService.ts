@@ -32,7 +32,7 @@ export async function getConversations(userId: string): Promise<Conversation[]> 
 
   if (error) throw new Error(error.message);
 
-  const rows = data as unknown as Array<{
+  const rows = data as unknown as {
     id: string;
     trainer_id: string;
     client_id: string;
@@ -44,7 +44,7 @@ export async function getConversations(userId: string): Promise<Conversation[]> 
     client_email: string;
     last_message_content: string | null;
     unread_count: number;
-  }> ?? [];
+  }[] ?? [];
 
   return rows.map((row) => {
     const isTrainer = row.trainer_id === userId;
