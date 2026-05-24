@@ -395,6 +395,38 @@ function deleteCustomWorkout(workoutId: string): Promise<{ error?: string }>
 
 ---
 
+### Recent Activity
+
+#### getRecentClientActivity
+
+Gets recent completed workouts across all connected clients. Used for the trainer dashboard activity feed.
+
+```typescript
+function getRecentClientActivity(trainerId: string, limit?: number): Promise<RecentActivity[]>
+```
+
+**Parameters:**
+- `trainerId` — Trainer's auth user ID
+- `limit` — Max rows (default: 30)
+
+**Returns:**
+```typescript
+interface RecentActivity {
+  id: string;
+  clientId: string;
+  clientName: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number;
+}
+```
+
+**Supabase operation:** `supabase.rpc('get_recent_client_activity', { p_trainer_id, p_limit })`
+**RLS:** SECURITY INVOKER — relies on caller's RLS policies (trainer must have active connections)
+**Error handling:** Throws Error
+
+---
+
 ### Client Progress Monitoring
 
 #### getClientProfile
@@ -571,3 +603,403 @@ function addNotificationResponseListener(handler: (response: NotificationRespons
 ```
 
 **Usage:** Call in a `useEffect` and return the cleanup function for unmounting.
+
+---
+
+## feedbackService.ts
+
+Source: `src/lib/feedbackService.ts`
+
+Manages workout feedback between trainers and clients, and provides detailed workout log views with exercise/set data.
+
+### getWorkoutDetail
+
+Fetches a complete workout log including all exercises, sets, and trainer feedback.
+
+```typescript
+function getWorkoutDetail(workoutLogId: string): Promise<WorkoutDetail>
+```
+
+**Returns:**
+```typescript
+interface WorkoutDetail {
+  id: string;
+  workoutName: string;
+  date: string;
+  durationSeconds: number;
+  completed: boolean;
+  notes: string | null;
+  exercises: WorkoutDetailExercise[];
+  feedback: WorkoutFeedback[];
+}
+
+interface WorkoutDetailExercise {
+  id: string;
+  exerciseName: string;
+  orderIndex: number;
+  sets: WorkoutDetailSet[];
+}
+
+interface WorkoutDetailSet {
+  id: string;
+  setNumber: number;
+  weight: number;
+  reps: number;
+  completed: boolean;
+}
+```
+
+**Supabase operations:**
+1. `.from('workout_logs').select(...).eq('id', workoutLogId).single()`
+2. `.from('exercise_logs').select('..., set_logs(...)').eq('workout_log_id', workoutLogId)`
+3. Calls `getWorkoutFeedback(workoutLogId)` internally
+
+**RLS:** User can read their own workout logs; trainers can read connected client workout logs
+**Error handling:** Throws Error
+
+---
+
+### getWorkoutFeedback
+
+Gets all feedback messages for a specific workout log.
+
+```typescript
+function getWorkoutFeedback(workoutLogId: string): Promise<WorkoutFeedback[]>
+```
+
+**Returns:**
+```typescript
+interface WorkoutFeedback {
+  id: string;
+  workoutLogId: string;
+  trainerId: string;
+  trainerName?: string;
+  message: string;
+  createdAt: string;
+}
+```
+
+**Supabase operation:** `.from('workout_feedback').select('*, trainer:profiles!...(name)').eq('workout_log_id', workoutLogId).order('created_at')`
+**RLS:** Trainers read own feedback; clients read feedback on own workouts
+**Error handling:** Throws Error
+
+---
+
+### addWorkoutFeedback
+
+Trainer adds feedback to a client's workout log.
+
+```typescript
+function addWorkoutFeedback(params: {
+  workoutLogId: string;
+  trainerId: string;
+  message: string;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Supabase operation:** `.from('workout_feedback').insert({...}).select('id').single()`
+**RLS:** `trainer_id = auth.uid()` AND workout belongs to an active client
+**Error handling:** Returns `{ error: message }` on failure
+
+---
+
+## goalService.ts
+
+Source: `src/lib/goalService.ts`
+
+Manages client fitness goals and trainer-initiated goal suggestions. Goals have types (`weight_target`, `lift_target`, `frequency`, `custom`) and lifecycle statuses (`active`, `completed`, `abandoned`).
+
+### Client Functions
+
+#### getClientGoals
+
+Gets all goals for a client, ordered by status then recency.
+
+```typescript
+function getClientGoals(clientId: string): Promise<ClientGoal[]>
+```
+
+**Returns:**
+```typescript
+interface ClientGoal {
+  id: string;
+  clientId: string;
+  goalType: GoalType;           // 'weight_target' | 'lift_target' | 'frequency' | 'custom'
+  title: string;
+  targetValue: number | null;
+  currentValue: number | null;
+  unit: string | null;
+  exerciseName: string | null;
+  deadline: string | null;
+  status: 'active' | 'completed' | 'abandoned';
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+```
+
+**Supabase operation:** `.from('client_goals').select('*').eq('client_id', clientId).order('status').order('updated_at', { ascending: false })`
+**RLS:** `client_id = auth.uid()`
+**Error handling:** Throws Error
+
+---
+
+#### createGoal
+
+Creates a new goal for the client.
+
+```typescript
+function createGoal(params: {
+  clientId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue?: number | null;
+  currentValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**RLS:** `client_id = auth.uid()`
+
+---
+
+#### updateGoal
+
+Updates fields of an existing goal. Only provided fields are changed.
+
+```typescript
+function updateGoal(goalId: string, updates: {
+  title?: string;
+  targetValue?: number | null;
+  currentValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+}): Promise<{ error?: string }>
+```
+
+**Note:** Always sets `updated_at` to current timestamp alongside any field changes.
+
+---
+
+#### deleteGoal
+
+Deletes a goal permanently.
+
+```typescript
+function deleteGoal(goalId: string): Promise<{ error?: string }>
+```
+
+**RLS:** `client_id = auth.uid()`
+
+---
+
+#### completeGoal
+
+Marks a goal as completed (sets `status = 'completed'`, records `completed_at`).
+
+```typescript
+function completeGoal(goalId: string): Promise<{ error?: string }>
+```
+
+---
+
+#### getPendingSuggestions
+
+Gets all pending goal suggestions from the client's trainer.
+
+```typescript
+function getPendingSuggestions(clientId: string): Promise<GoalSuggestion[]>
+```
+
+**Returns:**
+```typescript
+interface GoalSuggestion {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  targetGoalId: string | null;
+  suggestionType: 'new_goal' | 'adjustment';
+  goalType: GoalType;
+  title: string;
+  targetValue: number | null;
+  unit: string | null;
+  exerciseName: string | null;
+  deadline: string | null;
+  message: string | null;
+  status: 'pending' | 'accepted' | 'adjusted' | 'rejected';
+  clientResponseAt: string | null;
+  createdAt: string;
+  trainerName?: string;
+  targetGoalTitle?: string;
+}
+```
+
+**Supabase operation:** `.from('goal_suggestions').select('*, trainer:profiles!...(name), target_goal:client_goals!...(title)').eq('client_id', clientId).eq('status', 'pending')`
+**Error handling:** Throws Error
+
+---
+
+#### respondToSuggestion
+
+Client responds to a trainer suggestion (accept, adjust, or reject). If accepted/adjusted, creates or updates the goal accordingly.
+
+```typescript
+function respondToSuggestion(
+  suggestionId: string,
+  response: 'accepted' | 'adjusted' | 'rejected',
+  goalData?: {
+    clientId: string;
+    goalType: GoalType;
+    title: string;
+    targetValue?: number | null;
+    unit?: string | null;
+    exerciseName?: string | null;
+    deadline?: string | null;
+    targetGoalId?: string | null;
+    suggestionType: 'new_goal' | 'adjustment';
+  }
+): Promise<{ error?: string }>
+```
+
+**Behavior:**
+- Updates suggestion status + `client_response_at`
+- If `accepted`/`adjusted` and `suggestionType === 'new_goal'` → inserts new goal
+- If `accepted`/`adjusted` and `suggestionType === 'adjustment'` → updates existing goal by `targetGoalId`
+
+---
+
+### Trainer Functions
+
+#### getClientGoalsForTrainer
+
+Gets a connected client's active goals (read-only view for trainers).
+
+```typescript
+function getClientGoalsForTrainer(clientId: string): Promise<ClientGoal[]>
+```
+
+**RLS:** Trainer can read connected client goals via `trainer_clients` JOIN
+
+---
+
+#### suggestGoal
+
+Trainer suggests a new goal for a connected client.
+
+```typescript
+function suggestGoal(params: {
+  trainerId: string;
+  clientId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+  message?: string | null;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**RLS:** `trainer_id = auth.uid()` AND active connection to client
+
+---
+
+#### suggestAdjustment
+
+Trainer suggests an adjustment to an existing client goal.
+
+```typescript
+function suggestAdjustment(params: {
+  trainerId: string;
+  clientId: string;
+  targetGoalId: string;
+  goalType: GoalType;
+  title: string;
+  targetValue?: number | null;
+  unit?: string | null;
+  exerciseName?: string | null;
+  deadline?: string | null;
+  message?: string | null;
+}): Promise<{ id?: string; error?: string }>
+```
+
+**Note:** Sets `suggestion_type = 'adjustment'` and links to the target goal via `target_goal_id`.
+
+---
+
+#### withdrawSuggestion
+
+Trainer withdraws (deletes) a pending suggestion.
+
+```typescript
+function withdrawSuggestion(suggestionId: string): Promise<{ error?: string }>
+```
+
+**RLS:** `trainer_id = auth.uid()` AND `status = 'pending'`
+
+---
+
+### Auto-Tracking
+
+#### refreshGoalProgress
+
+Updates `currentValue` on active goals that support auto-tracking. Called on screen focus to reflect latest data without requiring manual entry.
+
+```typescript
+function refreshGoalProgress(clientId: string, goals: ClientGoal[]): Promise<ClientGoal[]>
+```
+
+**Auto-tracked goal types:**
+- `frequency` → counts completed workouts this week (Mon-Sun)
+- `weight_target` → reads latest body weight from `body_metrics`
+
+**Returns:** Same goals array with `currentValue` updated where applicable. Does not write to the database — updates are display-only until the client explicitly saves.
+
+---
+
+## Utility Functions
+
+### confirm.ts
+
+Source: `src/lib/confirm.ts`
+
+Platform-aware confirmation dialog for destructive actions.
+
+```typescript
+function confirmAction(
+  title: string,
+  message: string,
+  destructiveLabel: string,
+  cancelLabel: string,
+  onConfirm: () => void,
+): void
+```
+
+**Platform behavior:**
+- **Native (iOS/Android):** Shows `Alert.alert` with cancel and destructive buttons
+- **Web:** Falls back to `window.confirm()` with concatenated title + message
+
+---
+
+### formatDate.ts
+
+Source: `src/lib/formatDate.ts`
+
+Locale-aware date formatting using the user's language preference.
+
+```typescript
+function formatDate(
+  date: Date | string,
+  language: 'bg' | 'en',
+  options?: Intl.DateTimeFormatOptions,
+): string
+```
+
+**Locale mapping:**
+- `bg` → `'bg-BG'`
+- `en` → `'en-US'`
+
+**Usage:** `formatDate(workout.date, profile.language, { month: 'short', day: 'numeric' })`
