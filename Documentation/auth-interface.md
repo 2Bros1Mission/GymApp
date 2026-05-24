@@ -139,7 +139,9 @@ Implementation uses `useSegments()` to detect the current route group and `useRo
 
 The `(tabs)/_layout.tsx` conditionally renders tab bar items based on `profile.role`:
 - **Clients** see: Home, Workouts, Progress, Profile
-- **Trainers** see: Dashboard (Home), Workouts, Progress, Profile + additional screens accessible from the dashboard (trainer-clients, client-progress, workout-builder)
+- **Trainers** see: Dashboard, Profile
+
+On desktop (`lg` breakpoint, 1024px+), the tab bar is hidden entirely and replaced by a persistent Sidebar with role-aware navigation items (including Messages, which is not a tab).
 
 ### How Role Affects RLS Policies
 

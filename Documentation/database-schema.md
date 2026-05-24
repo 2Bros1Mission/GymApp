@@ -586,3 +586,4 @@ All migrations use 14-digit timestamp format (`YYYYMMDDHHMMSS`):
 | `20260408120000_workout_feedback.sql` | `workout_feedback` table + RLS |
 | `20260409120000_remove_trainer_email_from_rpc.sql` | Remove `trainer_email` from `redeem_invite_code` response |
 | `20260410120000_messaging.sql` | `conversations` + `messages` tables, messaging RPCs, Realtime |
+| `20260411120000_recent_client_activity_rpc.sql` | `get_recent_client_activity` RPC for trainer dashboard |
