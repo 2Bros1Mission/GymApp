@@ -281,11 +281,14 @@ export interface ChallengeTemplate {
   points: number;
   category: string | null;
   templateGroup: string;
+  active: boolean;
+  createdAt: string;
 }
 
 export interface Challenge {
   id: string;
   templateId: string | null;
+  creatorId: string | null;
   source: 'platform' | 'trainer';
   title: string;
   titleBg: string | null;
@@ -300,6 +303,7 @@ export interface Challenge {
   status: 'active' | 'completed' | 'expired';
   startDate: string;
   endDate: string | null;
+  createdAt: string;
 }
 
 export interface ChallengeParticipant {
@@ -314,6 +318,7 @@ export interface ChallengeParticipant {
   completedAt: string | null;
   rank: number | null;
   source: 'discovery' | 'trainer_assigned';
+  createdAt: string;
   challenge: Challenge;
 }
 
@@ -323,6 +328,7 @@ export interface DiscoveryCard {
   availableAt: string | null;
 }
 
+/** Computed state per cadence for the discovery UI (enriched from user_challenge_state table + constants) */
 export interface UserChallengeState {
   cadence: 'daily' | 'weekly' | 'monthly';
   completionsThisPeriod: number;
@@ -338,6 +344,7 @@ export interface LeaderboardEntry {
   userId: string;
   userName: string;
   points: number;
+  refreshedAt: string;
 }
 
 export interface TrainerChallengeTemplate {
@@ -348,4 +355,5 @@ export interface TrainerChallengeTemplate {
   targetValue: number;
   category: string | null;
   description: string | null;
+  createdAt: string;
 }
