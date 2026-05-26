@@ -3,6 +3,7 @@
 -- Implements calculate_streak(p_user_id, p_challenge_id) using
 -- gaps-and-islands algorithm on workout_logs.gym_date.
 -- Called by the progress tracking trigger (#133) for streak challenges.
+-- Security: INVOKER — called from the SECURITY DEFINER trigger context.
 -- ============================================================
 
 create or replace function public.calculate_streak(p_user_id uuid, p_challenge_id uuid)
@@ -19,8 +20,20 @@ begin
   select start_date into v_start_date
   from public.challenges where id = p_challenge_id;
 
-  -- Today's gym_date (4AM Europe/Sofia boundary)
-  v_today := (date_trunc('day', now() at time zone 'Europe/Sofia' - interval '4 hours'))::date;
+  if v_start_date is null then
+    raise exception 'Challenge % not found', p_challenge_id;
+  end if;
+
+  -- Match the gym_date generated column formula exactly
+  v_today := (date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours'))::date;
+
+  -- Early exit: no workout today means streak is broken
+  if not exists (
+    select 1 from public.workout_logs
+    where user_id = p_user_id and gym_date = v_today
+  ) then
+    return 0;
+  end if;
 
   -- Gaps-and-islands: count consecutive days backwards from today
   with daily_workouts as (
@@ -40,14 +53,6 @@ begin
   where island = (
     select island from numbered where gym_date = v_today
   );
-
-  -- If no workout today, streak is 0 (broken)
-  if not exists (
-    select 1 from public.workout_logs
-    where user_id = p_user_id and gym_date = v_today
-  ) then
-    v_streak := 0;
-  end if;
 
   return v_streak;
 end;
