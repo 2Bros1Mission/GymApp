@@ -18,15 +18,18 @@ declare
   v_today date;
 begin
   select start_date into v_start_date
-  from public.challenges where id = p_challenge_id;
+  from public.challenges
+  where id = p_challenge_id and challenge_type = 'streak';
 
   if v_start_date is null then
-    raise exception 'Challenge % not found', p_challenge_id;
+    raise exception 'Challenge % not found or not a streak challenge', p_challenge_id;
   end if;
 
   -- Match the gym_date generated column formula exactly
   v_today := (date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours'))::date;
 
+  -- Workouts between 00:00-03:59 Sofia count toward previous gym_date;
+  -- streak resets until v_today advances at 04:00.
   -- Early exit: no workout today means streak is broken
   if not exists (
     select 1 from public.workout_logs
@@ -45,7 +48,7 @@ begin
   ),
   numbered as (
     select gym_date,
-           gym_date - (row_number() over (order by gym_date desc))::int as island
+           gym_date + (row_number() over (order by gym_date desc))::int as island
     from daily_workouts
   )
   select count(*)::integer into v_streak
