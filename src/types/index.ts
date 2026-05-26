@@ -263,3 +263,97 @@ export interface TrainerClient {
   clientEmail?: string;
   trainerName?: string;
 }
+
+// ============================================================
+// Challenge & Leaderboard Types (Issue #131)
+// ============================================================
+
+export interface ChallengeTemplate {
+  id: string;
+  title: string;
+  titleBg: string | null;
+  description: string | null;
+  descriptionBg: string | null;
+  challengeType: 'frequency' | 'streak' | 'custom_auto' | 'custom_self_reported';
+  cadence: 'daily' | 'weekly' | 'monthly';
+  difficulty: 'easy' | 'medium' | 'hard';
+  targetValue: number;
+  points: number;
+  category: string | null;
+  templateGroup: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface Challenge {
+  id: string;
+  templateId: string | null;
+  creatorId: string | null;
+  source: 'platform' | 'trainer';
+  title: string;
+  titleBg: string | null;
+  description: string | null;
+  descriptionBg: string | null;
+  challengeType: 'frequency' | 'streak' | 'custom_auto' | 'custom_self_reported';
+  cadence: 'daily' | 'weekly' | 'monthly' | 'one_time';
+  difficulty: 'easy' | 'medium' | 'hard' | null;
+  targetValue: number;
+  points: number;
+  category: string | null;
+  status: 'active' | 'completed' | 'expired';
+  startDate: string;
+  endDate: string | null;
+  createdAt: string;
+}
+
+export interface ChallengeParticipant {
+  id: string;
+  challengeId: string;
+  userId: string;
+  currentProgress: number;
+  longestStreak: number;
+  targetValue: number;
+  status: 'active' | 'completed' | 'paused' | 'abandoned';
+  joinedAt: string;
+  completedAt: string | null;
+  rank: number | null;
+  source: 'discovery' | 'trainer_assigned';
+  createdAt: string;
+  challenge: Challenge;
+}
+
+export interface DiscoveryCard {
+  challenge: Challenge;
+  state: 'available' | 'cooldown' | 'limit_reached';
+  availableAt: string | null;
+}
+
+/** Computed state per cadence for the discovery UI (enriched from user_challenge_state table + constants) */
+export interface UserChallengeState {
+  cadence: 'daily' | 'weekly' | 'monthly';
+  completionsThisPeriod: number;
+  maxCompletions: number;
+  activeCount: number;
+  maxActive: number;
+  lastPickAt: string | null;
+  cooldownEndsAt: string | null;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  userName: string;
+  points: number;
+  refreshedAt: string;
+}
+
+export interface TrainerChallengeTemplate {
+  id: string;
+  trainerId: string;
+  title: string;
+  challengeType: 'frequency' | 'streak' | 'custom';
+  targetValue: number;
+  category: string | null;
+  description: string | null;
+  createdAt: string;
+}
