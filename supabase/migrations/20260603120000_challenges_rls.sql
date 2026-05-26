@@ -15,6 +15,7 @@ returns setof uuid
 language sql
 security definer
 stable
+set search_path = public
 as $$
   select challenge_id from public.challenge_participants where user_id = auth.uid();
 $$;
@@ -24,8 +25,19 @@ returns setof uuid
 language sql
 security definer
 stable
+set search_path = public
 as $$
   select id from public.challenges where creator_id = auth.uid();
+$$;
+
+create or replace function public.is_active_challenge(p_challenge_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (select 1 from public.challenges where id = p_challenge_id and status = 'active');
 $$;
 
 -- 1. challenge_templates — Public library, readable by all authenticated users
@@ -108,9 +120,7 @@ if not exists (select 1 from pg_policies where policyname = 'Users can join acti
     to authenticated
     with check (
       user_id = auth.uid()
-      and challenge_id in (
-        select id from public.challenges where status = 'active'
-      )
+      and public.is_active_challenge(challenge_id)
     );
 end if;
 end $$;
