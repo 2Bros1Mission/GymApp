@@ -22,6 +22,11 @@
 --   because workout_logs.category does not exist yet (#148).
 --   When #148 lands, replace the skip with a real
 --   IS DISTINCT FROM match against NEW.category.
+-- * FOR UPDATE OF cp on the cursor + completed_at IS NULL on
+--   the completion UPDATE: defends against concurrent workout
+--   inserts double-incrementing points / completions counters.
+--   The row lock serializes per-participant updates; the
+--   live completed_at re-check ensures side-effects fire once.
 -- ============================================================
 
 create or replace function public.fn_workout_log_challenge_progress()
@@ -38,7 +43,10 @@ declare
 begin
   -- Iterate over the user's active challenge participations.
   -- The JOIN pulls challenge metadata so we don't re-query
-  -- challenges inside the loop.
+  -- challenges inside the loop. FOR UPDATE OF cp serializes
+  -- concurrent workout-insert triggers for the same participant,
+  -- so two simultaneous inserts can't both pass the completion
+  -- check and double-credit points / completions_this_period.
   for v_participant in
     select
       cp.id              as participant_id,
@@ -46,7 +54,6 @@ begin
       cp.current_progress,
       cp.longest_streak,
       cp.target_value,
-      cp.completed_at,
       c.challenge_type,
       c.cadence,
       c.category,
@@ -56,6 +63,7 @@ begin
     join public.challenges c on c.id = cp.challenge_id
     where cp.user_id = new.user_id
       and cp.status = 'active'
+    for update of cp
   loop
     -- Freeze check: platform challenges only. Trainer challenges
     -- and 'one_time' cadence are not part of discovery freeze, so
@@ -105,17 +113,20 @@ begin
         longest_streak   = greatest(longest_streak, v_new_progress)
     where id = v_participant.participant_id;
 
-    -- Completion. The completed_at IS NULL guard ensures the
-    -- side-effects fire exactly once per participant per period.
-    if v_new_progress >= v_participant.target_value
-       and v_participant.completed_at is null then
+    -- Completion. Re-checking completed_at IS NULL on the UPDATE
+    -- itself (rather than reading the cursor snapshot) ensures
+    -- the completion side-effects fire exactly once even when
+    -- concurrent triggers race past the FOR UPDATE serialization.
+    -- FOUND tells us whether the UPDATE actually flipped the row.
+    if v_new_progress >= v_participant.target_value then
 
       update public.challenge_participants
       set completed_at = now(),
           status       = 'completed'
-      where id = v_participant.participant_id;
+      where id = v_participant.participant_id
+        and completed_at is null;
 
-      if v_participant.source = 'platform' then
+      if found and v_participant.source = 'platform' then
         update public.user_challenge_state
         set completions_this_period = completions_this_period + 1
         where user_id = new.user_id
