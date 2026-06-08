@@ -313,10 +313,9 @@ export interface ChallengeParticipant {
   currentProgress: number;
   longestStreak: number;
   targetValue: number;
-  status: 'active' | 'completed' | 'paused' | 'abandoned';
+  status: 'active' | 'completed' | 'abandoned';
   joinedAt: string;
   completedAt: string | null;
-  rank: number | null;
   source: 'discovery' | 'trainer_assigned';
   createdAt: string;
   challenge: Challenge;

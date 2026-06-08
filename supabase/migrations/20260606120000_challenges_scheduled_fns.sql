@@ -5,9 +5,9 @@
 -- (#135). These are the background jobs that keep the challenge
 -- system running:
 --
---   reset_daily_challenges()       -- daily 4:00 AM Sofia
---   reset_weekly_challenges()      -- Monday 4:00 AM Sofia
---   reset_monthly_challenges()     -- 1st of month 4:00 AM Sofia
+--   reset_daily_challenges()       -- daily 04:00 Sofia
+--   reset_weekly_challenges()      -- Monday 04:00 Sofia
+--   reset_monthly_challenges()     -- 1st of month 04:00 Sofia
 --   complete_expired_challenges()  -- hourly
 --   refresh_leaderboard_snapshot() -- every 30 min
 --
@@ -20,6 +20,18 @@
 --     Real lifecycle is active -> completed | abandoned, never
 --     paused. The earlier "resume paused weekly" behavior in the
 --     issue spec is dropped accordingly.
+--
+-- All date math uses Europe/Sofia local time with a 4 AM day
+-- boundary (matches the gym_date generated column from #129).
+--
+-- All reset functions are written so a second invocation within
+-- the same period is a no-op (cron retry safety): they only
+-- touch state where period_start lags the new period.
+--
+-- Ranking tiebreakers end with profiles.id to guarantee a
+-- deterministic order even when leaderboard_points and
+-- leaderboard_points_updated_at collide (notably right after a
+-- monthly reset zeros everything in one statement).
 --
 -- Depends on: #128, #129, #133.
 -- Blocks: #135.
@@ -40,8 +52,10 @@ alter table public.challenge_participants
 
 -- 1. reset_daily_challenges() ----------------------------------
 -- Zero progress on all active daily participants and reset the
--- per-user daily completion counter. period_start advances to the
--- new gym_date (4 AM Sofia boundary).
+-- per-user daily completion counter. The state UPDATE only fires
+-- for rows whose period_start lags the current gym_date, so a
+-- repeat invocation later the same day is a no-op (does not wipe
+-- mid-day completion accumulation).
 
 create or replace function public.reset_daily_challenges()
 returns void
@@ -49,6 +63,10 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_new_period date := (
+    date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
+  )::date;
 begin
   update public.challenge_participants
   set current_progress = 0
@@ -60,10 +78,9 @@ begin
 
   update public.user_challenge_state
   set completions_this_period = 0,
-      period_start = (
-        date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
-      )::date
-  where cadence = 'daily';
+      period_start = v_new_period
+  where cadence = 'daily'
+    and period_start < v_new_period;
 end;
 $$;
 
@@ -78,6 +95,10 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_new_period date := (
+    date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
+  )::date;
 begin
   update public.challenge_participants
   set current_progress = 0
@@ -89,24 +110,30 @@ begin
 
   update public.user_challenge_state
   set completions_this_period = 0,
-      period_start = (
-        date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
-      )::date
-  where cadence = 'weekly';
+      period_start = v_new_period
+  where cadence = 'weekly'
+    and period_start < v_new_period;
 end;
 $$;
 
 
 -- 3. reset_monthly_challenges() --------------------------------
 -- Resets monthly cadence AND runs the leaderboard monthly cycle:
---   a) Archive the standings of the month that just ended into
---      leaderboard_history. The archive row's `month` column
---      reflects the previous month (e.g. cron fires 2026-07-01
---      4:00 AM Sofia -> archive labeled 2026-06-01).
---   b) Zero leaderboard_points for all users.
---   c) Truncate leaderboard_snapshot.
--- Only users with leaderboard_points > 0 are archived; users
--- who didn't score in the month leave no history row.
+--   a) Compute the month being archived (the one that just
+--      ended). On 2026-07-01 04:00 Sofia this evaluates to
+--      2026-06-01.
+--   b) If the archive for that month already exists, return
+--      early. This guards the destructive UPDATE on profiles
+--      against a cron retry / manual re-run.
+--   c) Reset monthly challenge progress and the monthly
+--      completion counter (period_start guard same as daily/weekly).
+--   d) Archive the standings of the month that just ended.
+--      Only users with leaderboard_points > 0 get a row.
+--   e) Zero leaderboard_points for all users; refresh the
+--      tiebreaker timestamp so the new month starts even.
+--   f) Rebuild the leaderboard_snapshot. Doing it in-band keeps
+--      the leaderboard from being empty for up to 30 minutes
+--      between the monthly reset and the next refresh tick.
 
 create or replace function public.reset_monthly_challenges()
 returns void
@@ -115,9 +142,24 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_archive_month date;
+  v_new_period date := (
+    date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
+  )::date;
+  v_archive_month date := date_trunc(
+    'month',
+    ((now() at time zone 'Europe/Sofia')::date - interval '1 day')
+  )::date;
 begin
-  -- a) Reset monthly challenge progress + counters.
+  -- Idempotency guard: if the previous month's archive already
+  -- exists, the monthly cycle has already run for this period.
+  -- Bail out before touching destructive state.
+  if exists (
+    select 1 from public.leaderboard_history where month = v_archive_month
+  ) then
+    return;
+  end if;
+
+  -- Reset monthly challenge progress + counter.
   update public.challenge_participants
   set current_progress = 0
   where status = 'active'
@@ -128,20 +170,12 @@ begin
 
   update public.user_challenge_state
   set completions_this_period = 0,
-      period_start = (
-        date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
-      )::date
-  where cadence = 'monthly';
+      period_start = v_new_period
+  where cadence = 'monthly'
+    and period_start < v_new_period;
 
-  -- b) Compute the month being archived: previous month's first day,
-  -- in Sofia time. On 2026-07-01 04:00 Sofia this evaluates to 2026-06-01.
-  v_archive_month := date_trunc(
-    'month',
-    ((now() at time zone 'Europe/Sofia')::date - interval '1 day')
-  )::date;
-
-  -- c) Archive standings for users who actually scored.
-  -- ON CONFLICT guard: re-running the same monthly reset is a no-op.
+  -- Archive standings for users who actually scored.
+  -- user_name is captured at archive time (immutable history).
   insert into public.leaderboard_history (user_id, month, final_rank, final_points, user_name)
   select
     p.id,
@@ -149,31 +183,34 @@ begin
     row_number() over (
       order by p.leaderboard_points desc,
                p.leaderboard_points_updated_at asc,
-               p.name asc
+               p.name asc,
+               p.id asc
     ),
     p.leaderboard_points,
     p.name
   from public.profiles p
-  where p.leaderboard_points > 0
-  on conflict (user_id, month) do nothing;
+  where p.leaderboard_points > 0;
 
-  -- d) Zero everyone's points and refresh the tiebreaker timestamp
-  -- so the next month starts on equal footing.
+  -- Zero everyone's points and refresh the tiebreaker timestamp.
   update public.profiles
   set leaderboard_points = 0,
       leaderboard_points_updated_at = now();
 
-  -- e) Clear the snapshot. refresh_leaderboard_snapshot() will
-  -- rebuild it on its next cron tick.
-  truncate public.leaderboard_snapshot;
+  -- Rebuild the snapshot in-band so readers see the fresh
+  -- (empty-because-everyone-is-zero) leaderboard immediately.
+  perform public.refresh_leaderboard_snapshot();
 end;
 $$;
 
 
 -- 4. complete_expired_challenges() -----------------------------
 -- Finalize trainer challenges past their end_date. Platform
--- challenges don't expire (no end_date enforcement). No rank
--- assignment per business rule (trainer challenges have no rank).
+-- challenges don't expire. No rank assignment per business rule
+-- (trainer challenges have no rank).
+--
+-- Date comparison uses Sofia local date (consistent with the
+-- rest of the system); using server-TZ current_date here would
+-- create a 1-3 hour expiry lag depending on host timezone.
 
 create or replace function public.complete_expired_challenges()
 returns void
@@ -181,10 +218,9 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_today date := (now() at time zone 'Europe/Sofia')::date;
 begin
-  -- Mark still-active participants of expired trainer challenges
-  -- as abandoned. Already-completed participants keep their
-  -- completed_at / status as recorded by the progress trigger.
   update public.challenge_participants
   set status = 'abandoned'
   where status = 'active'
@@ -193,23 +229,27 @@ begin
       where source = 'trainer'
         and status = 'active'
         and end_date is not null
-        and end_date < current_date
+        and end_date < v_today
     );
 
-  -- Close out the challenges themselves.
   update public.challenges
   set status = 'completed'
   where source = 'trainer'
     and status = 'active'
     and end_date is not null
-    and end_date < current_date;
+    and end_date < v_today;
 end;
 $$;
 
 
 -- 5. refresh_leaderboard_snapshot() ----------------------------
--- Rebuild the top-100 cache. Truncate-and-insert is fine here
--- because the snapshot is purely derived state.
+-- Rebuild the top-100 cache. Truncate-and-insert is fine because
+-- the snapshot is purely derived state. TRUNCATE takes
+-- ACCESS EXCLUSIVE which blocks readers until commit, so the
+-- table is never observed empty by concurrent readers.
+--
+-- Tiebreaker chain ends with profiles.id for deterministic
+-- ordering when points / updated_at / name all collide.
 
 create or replace function public.refresh_leaderboard_snapshot()
 returns void
@@ -226,7 +266,8 @@ begin
     row_number() over (
       order by p.leaderboard_points desc,
                p.leaderboard_points_updated_at asc,
-               p.name asc
+               p.name asc,
+               p.id asc
     ),
     p.leaderboard_points,
     p.name,
@@ -235,7 +276,8 @@ begin
   where p.leaderboard_points > 0
   order by p.leaderboard_points desc,
            p.leaderboard_points_updated_at asc,
-           p.name asc
+           p.name asc,
+           p.id asc
   limit 100;
 end;
 $$;
