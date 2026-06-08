@@ -52,10 +52,14 @@ alter table public.challenge_participants
 
 -- 1. reset_daily_challenges() ----------------------------------
 -- Zero progress on all active daily participants and reset the
--- per-user daily completion counter. The state UPDATE only fires
--- for rows whose period_start lags the current gym_date, so a
--- repeat invocation later the same day is a no-op (does not wipe
--- mid-day completion accumulation).
+-- per-user daily completion counter.
+--
+-- Idempotency: guarded against same-day retries via the
+-- user_challenge_state.period_start marker. If any daily state
+-- row already shows period_start = today, a previous run today
+-- already happened and we bail out before zeroing participant
+-- progress. This protects against a cron retry or manual
+-- re-invocation wiping mid-day in-flight progress.
 
 create or replace function public.reset_daily_challenges()
 returns void
@@ -68,6 +72,13 @@ declare
     date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
   )::date;
 begin
+  if exists (
+    select 1 from public.user_challenge_state
+    where cadence = 'daily' and period_start >= v_new_period
+  ) then
+    return;
+  end if;
+
   update public.challenge_participants
   set current_progress = 0
   where status = 'active'
@@ -86,8 +97,7 @@ $$;
 
 
 -- 2. reset_weekly_challenges() ---------------------------------
--- Same as daily, for weekly cadence. No paused -> active flip
--- (per business rule: paused is not a real lifecycle state).
+-- Same as daily, for weekly cadence. Same idempotency guard.
 
 create or replace function public.reset_weekly_challenges()
 returns void
@@ -100,6 +110,13 @@ declare
     date_trunc('day', (now() at time zone 'Europe/Sofia') - interval '4 hours')
   )::date;
 begin
+  if exists (
+    select 1 from public.user_challenge_state
+    where cadence = 'weekly' and period_start >= v_new_period
+  ) then
+    return;
+  end if;
+
   update public.challenge_participants
   set current_progress = 0
   where status = 'active'
@@ -134,6 +151,13 @@ $$;
 --   f) Rebuild the leaderboard_snapshot. Doing it in-band keeps
 --      the leaderboard from being empty for up to 30 minutes
 --      between the monthly reset and the next refresh tick.
+--
+-- The archive guard relies on at least one user having scored
+-- (otherwise the archive INSERT writes zero rows and the guard
+-- can't trip on a retry). The day-1 guard above makes this moot
+-- in practice: a retry after a zero-score month is harmless
+-- because the destructive UPDATEs would be no-ops on already-zero
+-- data.
 
 create or replace function public.reset_monthly_challenges()
 returns void
@@ -150,6 +174,18 @@ declare
     ((now() at time zone 'Europe/Sofia')::date - interval '1 day')
   )::date;
 begin
+  -- Safety guard: this function MUST only run on the 1st of
+  -- the month. A manual mid-month invocation would archive the
+  -- running month's mid-period standings as "final" and zero
+  -- everyone's points, destroying real data. The cron in #135
+  -- only fires on day 1, but defense-in-depth against manual /
+  -- ad-hoc calls (the function is `security definer` and
+  -- callable by any role with EXECUTE).
+  if extract(day from (now() at time zone 'Europe/Sofia')::date) <> 1 then
+    raise exception 'reset_monthly_challenges may only run on the 1st of the month (today Sofia: %)',
+      (now() at time zone 'Europe/Sofia')::date;
+  end if;
+
   -- Idempotency guard: if the previous month's archive already
   -- exists, the monthly cycle has already run for this period.
   -- Bail out before touching destructive state.
