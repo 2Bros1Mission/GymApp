@@ -326,6 +326,11 @@ describe('getDiscoveryPool', () => {
     expect(out.weekly).toHaveLength(1);
     expect(out.monthly).toHaveLength(1);
     expect(out.daily.every((c) => c.state === 'available')).toBe(true);
+
+    // Pin the .limit(110) on the pool query — without it the entire active
+    // platform catalog is fetched on every call (only 11 cards are visible).
+    const poolQuery = mockQueries.find((q) => q.table === 'challenges');
+    expect(poolQuery?.filters).toContainEqual({ method: 'limit', args: [110] });
   });
 
   it('filters out challenges the user already has active', async () => {

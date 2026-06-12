@@ -203,11 +203,15 @@ begin
   returning id into v_participant_id;
 
   -- 8. Update per-cadence state: last_pick_at + recent_template_ids (cap 10).
-  --    Dedupe an earlier occurrence of the same template, keep the
-  --    other 9 most recent (in original order), then prepend the new
-  --    template at position 0. Without the explicit "limit 9 of the
-  --    *kept* set, then prepend", a dedupe at position 1-9 of a full
-  --    array would still drop the oldest entry instead of the duplicate.
+  --    Dedupe an earlier occurrence of the same template, keep up to 9 of
+  --    the surviving entries in original order, then prepend the newly
+  --    picked template at index 1. Effects:
+  --      - new template, full array     → tail entry (index 10) drops
+  --      - new template, partial array  → array grows by one, no drops
+  --      - duplicate of an existing one → that entry moves to the front;
+  --                                       array length is unchanged
+  --    The duplicate case explicitly does NOT evict the tail — the rolling
+  --    10-template anti-repetition window stays the same length.
   update public.user_challenge_state s
   set last_pick_at = now(),
       recent_template_ids = array_prepend(
