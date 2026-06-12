@@ -57,4 +57,7 @@ end $$;
 -- No INSERT/UPDATE/DELETE policies for end users — fn_pick_challenge
 -- (security definer) is the only writer. Without a write policy,
 -- direct client writes are rejected, which matches the design
--- (the RPC is the single source of truth for a pick).
+-- (the RPC is the single source of truth for a pick). Explicit
+-- revoke documents intent and defends against `grant all` migrations
+-- that might come later.
+revoke insert, update, delete on table public.challenge_pick_cooldowns from authenticated;

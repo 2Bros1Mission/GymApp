@@ -42,6 +42,10 @@ function mockMakeChain(table: string): unknown {
     record.filters.push({ method: 'order', args });
     return chain;
   };
+  chain.limit = (...args: unknown[]) => {
+    record.filters.push({ method: 'limit', args });
+    return chain;
+  };
   chain.maybeSingle = () => Promise.resolve(mockQueue.shift() ?? { data: null, error: null });
   // Awaitable directly: when service does `await sb.from(...).eq(...)...`
   // the chain resolves to the next queued response.
@@ -72,19 +76,19 @@ describe('pickChallenge', () => {
       error: null,
     });
 
-    const res = await pickChallenge('user-1', 'ch-1');
+    const res = await pickChallenge('ch-1');
 
     expect(mockRpc).toHaveBeenCalledWith('fn_pick_challenge', { p_challenge_id: 'ch-1' });
     expect(res).toEqual({ ok: true, participantId: 'p-1' });
   });
 
-  it('returns error reason from RPC payload', async () => {
+  it('returns cooldown reason with availableAt from RPC payload', async () => {
     mockRpc.mockResolvedValue({
       data: { ok: false, error: 'cooldown', available_at: '2026-06-12T15:30:00Z' },
       error: null,
     });
 
-    const res = await pickChallenge('user-1', 'ch-1');
+    const res = await pickChallenge('ch-1');
 
     expect(res).toEqual({
       ok: false,
@@ -93,10 +97,43 @@ describe('pickChallenge', () => {
     });
   });
 
+  it('does not leak availableAt onto non-cooldown errors', async () => {
+    // RPC defensively never includes available_at for limit_reached, but
+    // pin the contract: even if it leaked one, the service strips it.
+    mockRpc.mockResolvedValue({
+      data: { ok: false, error: 'limit_reached', available_at: '2026-06-12T15:30:00Z' },
+      error: null,
+    });
+
+    const res = await pickChallenge('ch-1');
+
+    expect(res).toEqual({ ok: false, error: 'limit_reached' });
+    expect(res.availableAt).toBeUndefined();
+  });
+
+  it('surfaces already_picked when re-picking a finished challenge', async () => {
+    mockRpc.mockResolvedValue({
+      data: { ok: false, error: 'already_picked' },
+      error: null,
+    });
+
+    const res = await pickChallenge('ch-1');
+
+    expect(res).toEqual({ ok: false, error: 'already_picked' });
+  });
+
+  it('falls back to unknown when RPC payload omits an error reason', async () => {
+    mockRpc.mockResolvedValue({ data: { ok: false }, error: null });
+
+    const res = await pickChallenge('ch-1');
+
+    expect(res).toEqual({ ok: false, error: 'unknown' });
+  });
+
   it('returns generic error when RPC itself fails', async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'connection lost' } });
 
-    const res = await pickChallenge('user-1', 'ch-1');
+    const res = await pickChallenge('ch-1');
 
     expect(res.ok).toBe(false);
     expect(res.error).toBe('unknown');

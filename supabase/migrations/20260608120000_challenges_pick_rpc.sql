@@ -99,15 +99,32 @@ begin
     return jsonb_build_object('ok', false, 'error', 'not_platform');
   end if;
 
-  -- 2. Already enrolled? ---------------------------------------
-  if exists (
-    select 1 from public.challenge_participants
+  -- 2. Already enrolled / already picked --------------------------
+  -- The challenge_participants unique (challenge_id, user_id) treats
+  -- completed and abandoned rows as still occupying the slot — so a
+  -- user who completed or gave up on this exact challenges.id can't
+  -- re-pick it (the INSERT at step 7 would 23505 and surface as
+  -- 'unknown'). Catch both cases here for a clean error.
+  declare
+    v_existing_status text;
+  begin
+    select status into v_existing_status
+    from public.challenge_participants
     where user_id = v_user_id
-      and challenge_id = p_challenge_id
-      and status = 'active'
-  ) then
-    return jsonb_build_object('ok', false, 'error', 'already_active');
-  end if;
+      and challenge_id = p_challenge_id;
+
+    if found then
+      if v_existing_status = 'active' then
+        return jsonb_build_object('ok', false, 'error', 'already_active');
+      else
+        -- 'completed' or 'abandoned' — the slot is taken historically.
+        -- Anti-repetition + cooldown make this rare in practice (the
+        -- discovery pool wouldn't surface this challenge), but a stale
+        -- client could still post it.
+        return jsonb_build_object('ok', false, 'error', 'already_picked');
+      end if;
+    end if;
+  end;
 
   -- 3. Lock the per-cadence state row early to serialize concurrent
   --    picks. UPSERT pattern: insert if missing, then re-select FOR UPDATE.
@@ -135,7 +152,12 @@ begin
     return jsonb_build_object(
       'ok', false,
       'error', 'cooldown',
-      'available_at', to_char(v_cooldown_picked_at + interval '1 hour', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      -- Return the timestamptz directly. PostgREST serializes timestamptz
+      -- as ISO-8601 UTC. Avoid to_char() — it formats in the session
+      -- TimeZone, which we can't assume is UTC; concatenating "Z" onto
+      -- a non-UTC formatted value would silently shift the displayed
+      -- time on the client.
+      'available_at', v_cooldown_picked_at + interval '1 hour'
     );
   end if;
 
@@ -181,21 +203,29 @@ begin
   returning id into v_participant_id;
 
   -- 8. Update per-cadence state: last_pick_at + recent_template_ids (cap 10).
-  --    Prepend new template_id, dedupe an earlier occurrence of the same id,
-  --    keep at most the last 10 entries. Order: newest first.
+  --    Dedupe an earlier occurrence of the same template, keep the
+  --    other 9 most recent (in original order), then prepend the new
+  --    template at position 0. Without the explicit "limit 9 of the
+  --    *kept* set, then prepend", a dedupe at position 1-9 of a full
+  --    array would still drop the oldest entry instead of the duplicate.
   update public.user_challenge_state s
   set last_pick_at = now(),
-      recent_template_ids = (
-        select array_agg(t order by ord)
-        from (
-          select v_challenge.template_id as t, 0 as ord
-          union all
-          select prev_t, prev_ord
-          from unnest(coalesce(s.recent_template_ids, '{}'::uuid[]))
-            with ordinality as u(prev_t, prev_ord)
-          where prev_t <> v_challenge.template_id
-        ) ranked
-        where ord < 10
+      recent_template_ids = array_prepend(
+        v_challenge.template_id,
+        coalesce(
+          (
+            select array_agg(prev_t order by prev_ord)
+            from (
+              select prev_t, prev_ord
+              from unnest(coalesce(s.recent_template_ids, '{}'::uuid[]))
+                with ordinality as u(prev_t, prev_ord)
+              where prev_t <> v_challenge.template_id
+              order by prev_ord
+              limit 9
+            ) kept
+          ),
+          '{}'::uuid[]
+        )
       )
   where s.id = v_state.id;
 

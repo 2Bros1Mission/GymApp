@@ -25,6 +25,20 @@ const sb = supabase as unknown as {
 // Changing these here is a behavior change — keep in sync with the
 // matching CASE expressions in fn_pick_challenge (#136 RPC migration)
 // and the freeze check in fn_workout_log_challenge_progress (#133).
+//
+// userId parameter contract: read functions (`getDiscoveryPool`,
+// `getUserChallengeProgress`, `getUserChallengeState`) take a userId
+// and use it as an explicit `eq('user_id', ...)` filter. RLS (#130)
+// additionally enforces `auth.uid() = user_id`, so a caller that
+// passes a userId that doesn't match the authenticated session will
+// silently get back empty results. Callers are expected to thread
+// the auth user (matches the pattern in goalService.ts /
+// feedbackService.ts). Mutations (`pickChallenge`) do NOT take a
+// userId — they go through the RPC which reads `auth.uid()` directly.
+//
+// TODO (future issues): #137 owns getActiveChallenges, abandonChallenge,
+// reportProgress; #138 owns leaderboard reads; #139 owns trainer
+// challenge writes. This file will accumulate them.
 
 const POOL_SIZE = { daily: 3, weekly: 3, monthly: 5 } as const;
 const MAX_ACTIVE = { daily: 1, weekly: 3, monthly: 5 } as const;
@@ -119,7 +133,14 @@ export async function getDiscoveryPool(
       .eq('status', 'active')
       .eq('source', 'platform')
       .in('cadence', ['daily', 'weekly', 'monthly'])
-      .order('created_at', { ascending: true }),
+      // Pool caps at 3+3+5=11 visible cards. Anti-repetition + active-filter
+      // can drop entries before the cap is reached, so fetch a small superset
+      // (10× cap) to leave headroom without loading the entire active catalog.
+      // If the catalog grows large enough that even 10× isn't enough, the
+      // discovery view will silently show fewer cards in some cadences —
+      // acceptable v1 behavior; revisit when content rotation lands.
+      .order('created_at', { ascending: true })
+      .limit(110),
   ]);
 
   if (activeChallengesRes.error) throw new Error(activeChallengesRes.error.message);
@@ -236,6 +257,7 @@ export type PickChallengeError =
   | 'inactive'
   | 'not_platform'
   | 'already_active'
+  | 'already_picked'
   | 'cooldown'
   | 'limit_reached'
   | 'unauthenticated'
@@ -252,22 +274,18 @@ export interface PickChallengeResult {
 /**
  * Atomically pick a platform challenge from the discovery pool.
  *
+ * The RPC reads `auth.uid()` server-side, so this function does not take
+ * a userId parameter — the calling user is whoever the supabase client
+ * is currently authenticated as.
+ *
  * All validation and writes happen server-side in fn_pick_challenge —
  * see `supabase/migrations/20260608120000_challenges_pick_rpc.sql`.
- * The RPC enforces cooldown, active-limit, completion-limit, and
- * already-active checks under a row lock, and updates
- * user_challenge_state.recent_template_ids + challenge_pick_cooldowns
- * in the same transaction.
+ * The RPC enforces cooldown, active-limit, completion-limit,
+ * already-active, and already-picked-and-finished checks under a row
+ * lock, and updates user_challenge_state.recent_template_ids +
+ * challenge_pick_cooldowns in the same transaction.
  */
-export async function pickChallenge(
-  userId: string,
-  challengeId: string
-): Promise<PickChallengeResult> {
-  // userId is intentionally ignored — the RPC reads auth.uid() server-side.
-  // Kept on the signature so the service contract matches the rest of
-  // the file and the issue spec, and so future tests can assert it.
-  void userId;
-
+export async function pickChallenge(challengeId: string): Promise<PickChallengeResult> {
   const { data, error } = await sb.rpc('fn_pick_challenge', {
     p_challenge_id: challengeId,
   });
@@ -287,11 +305,13 @@ export async function pickChallenge(
   if (result.ok) {
     return { ok: true, participantId: result.participant_id };
   }
-  return {
-    ok: false,
-    error: result.error ?? 'unknown',
-    availableAt: result.available_at,
-  };
+  // `availableAt` is only meaningful for the 'cooldown' error; don't
+  // leak it onto other error shapes (limit_reached / not_found / ...).
+  const err: PickChallengeError = result.error ?? 'unknown';
+  if (err === 'cooldown' && result.available_at) {
+    return { ok: false, error: 'cooldown', availableAt: result.available_at };
+  }
+  return { ok: false, error: err };
 }
 
 // ─── Per-challenge participation lookup ──────────────────────────────────────
