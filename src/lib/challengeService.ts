@@ -36,8 +36,7 @@ const sb = supabase as unknown as {
 // feedbackService.ts). Mutations (`pickChallenge`) do NOT take a
 // userId — they go through the RPC which reads `auth.uid()` directly.
 //
-// TODO (future issues): #137 owns getActiveChallenges, abandonChallenge,
-// reportProgress; #138 owns leaderboard reads; #139 owns trainer
+// TODO (future issues): #138 owns leaderboard reads; #139 owns trainer
 // challenge writes. This file will accumulate them.
 
 const POOL_SIZE = { daily: 3, weekly: 3, monthly: 5 } as const;
@@ -269,6 +268,107 @@ export interface PickChallengeResult {
   participantId?: string;
   /** ISO timestamp when the cooldown ends, present when error === 'cooldown'. */
   availableAt?: string;
+}
+
+// ─── Deadline computation (4AM Europe/Sofia boundary) ──────────────────────
+//
+// Returns the next deadline timestamp for a given cadence. Implementation
+// uses native Date with manual Sofia offset math — Sofia is UTC+2 (EET)
+// in winter and UTC+3 (EEST) in summer. We rely on Intl.DateTimeFormat
+// for the offset rather than hardcoding DST rules.
+
+function sofiaOffsetMinutes(at: Date): number {
+  // Asia approach: format the moment in Sofia and compute UTC delta.
+  const sofiaParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Sofia',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(at);
+  const m: Record<string, string> = {};
+  for (const p of sofiaParts) if (p.type !== 'literal') m[p.type] = p.value;
+  // Reconstruct as if Sofia local time were UTC, then diff against the real UTC.
+  const asIfUtc = Date.UTC(
+    Number(m.year),
+    Number(m.month) - 1,
+    Number(m.day),
+    Number(m.hour),
+    Number(m.minute),
+    Number(m.second)
+  );
+  return Math.round((asIfUtc - at.getTime()) / 60000);
+}
+
+function computeDeadline(
+  cadence: 'daily' | 'weekly' | 'monthly' | 'one_time',
+  now: Date,
+  endDate: string | null
+): string | null {
+  if (cadence === 'one_time') return endDate;
+
+  const offsetMin = sofiaOffsetMinutes(now);
+  // Convert "now" into a virtual Sofia-local instant by shifting the UTC clock.
+  const sofiaNow = new Date(now.getTime() + offsetMin * 60000);
+  const sofiaYear = sofiaNow.getUTCFullYear();
+  const sofiaMonth = sofiaNow.getUTCMonth();
+  const sofiaDate = sofiaNow.getUTCDate();
+  const sofiaHour = sofiaNow.getUTCHours();
+  const sofiaDow = sofiaNow.getUTCDay(); // 0=Sun..6=Sat
+
+  let target: Date;
+  if (cadence === 'daily') {
+    // Next 4AM Sofia. If we're past 4AM today, jump to tomorrow.
+    const dayOffset = sofiaHour >= 4 ? 1 : 0;
+    target = new Date(Date.UTC(sofiaYear, sofiaMonth, sofiaDate + dayOffset, 4, 0, 0));
+  } else if (cadence === 'weekly') {
+    // Next Monday 4AM Sofia. Monday = 1; if today is Monday after 4AM, jump 7 days.
+    const daysUntilMonday = (8 - sofiaDow) % 7 || 7;
+    const dayOffset = sofiaDow === 1 && sofiaHour < 4 ? 0 : daysUntilMonday;
+    target = new Date(Date.UTC(sofiaYear, sofiaMonth, sofiaDate + dayOffset, 4, 0, 0));
+  } else {
+    // monthly: 1st of next month at 4AM Sofia.
+    target = new Date(Date.UTC(sofiaYear, sofiaMonth + 1, 1, 4, 0, 0));
+  }
+
+  // Shift the Sofia-local target back to true UTC.
+  return new Date(target.getTime() - offsetMin * 60000).toISOString();
+}
+
+// ─── My-Challenges types (#137) ─────────────────────────────────────────────
+
+export interface ActiveChallengeWithDetails {
+  participant: ChallengeParticipant;
+  challenge: Challenge;
+  progressPercentage: number;
+  /** ISO 8601 timestamp of the next deadline, or null if no deadline applies. */
+  timeRemaining: string | null;
+  isStreakBroken: boolean;
+  /** Number of streak days lost vs. longest. Null for non-streak challenges. */
+  streakComebackDiff: number | null;
+}
+
+export interface AbandonResult {
+  ok: boolean;
+  error?: 'not_found' | 'not_active';
+}
+
+export type ReportProgressError =
+  | 'not_self_reported'
+  | 'not_active'
+  | 'invalid_value'
+  | 'not_found'
+  | 'unauthenticated'
+  | 'unknown';
+
+export interface ReportResult {
+  ok: boolean;
+  newProgress?: number;
+  completed?: boolean;
+  error?: ReportProgressError;
 }
 
 /**
