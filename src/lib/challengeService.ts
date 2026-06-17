@@ -550,3 +550,23 @@ export async function getActiveChallenges(
     };
   });
 }
+
+/**
+ * Marks an active participation as abandoned. Caller's identity is
+ * enforced by RLS (#130); no userId parameter is taken — matches the
+ * pickChallenge pattern. Returns `{ ok: false, error: 'not_active' }`
+ * when zero rows match (already abandoned, completed, or never joined).
+ */
+export async function abandonChallenge(challengeId: string): Promise<AbandonResult> {
+  const { data, error } = await sb
+    .from('challenge_participants')
+    .update({ status: 'abandoned' })
+    .eq('challenge_id', challengeId)
+    .eq('status', 'active')
+    .select('id');
+
+  if (error) return { ok: false, error: 'not_found' };
+  const rows = (data ?? []) as { id: string }[];
+  if (rows.length === 0) return { ok: false, error: 'not_active' };
+  return { ok: true };
+}

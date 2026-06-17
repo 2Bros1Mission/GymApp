@@ -4,6 +4,7 @@ import {
   getUserChallengeProgress,
   getDiscoveryPool,
   getActiveChallenges,
+  abandonChallenge,
 } from '../challengeService';
 
 // Supabase mock — use a per-table mockQueue of results so each .from()
@@ -45,6 +46,10 @@ function mockMakeChain(table: string): unknown {
   };
   chain.limit = (...args: unknown[]) => {
     record.filters.push({ method: 'limit', args });
+    return chain;
+  };
+  chain.update = (..._args: unknown[]) => {
+    record.filters.push({ method: 'update', args: _args });
     return chain;
   };
   chain.maybeSingle = () => Promise.resolve(mockQueue.shift() ?? { data: null, error: null });
@@ -608,5 +613,31 @@ describe('getActiveChallenges', () => {
     });
     const result = await getActiveChallenges('user-1');
     expect(result[0].timeRemaining).toBe('2026-12-31T00:00:00Z');
+  });
+});
+
+describe('abandonChallenge', () => {
+  beforeEach(() => {
+    mockQueue.length = 0;
+    mockQueries.length = 0;
+    mockRpc.mockReset();
+  });
+
+  it('returns ok when a row was updated', async () => {
+    mockQueue.push({ data: [{ id: 'p1' }], error: null });
+    const result = await abandonChallenge('c1');
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('returns not_active when no rows matched', async () => {
+    mockQueue.push({ data: [], error: null });
+    const result = await abandonChallenge('c1');
+    expect(result).toEqual({ ok: false, error: 'not_active' });
+  });
+
+  it('returns not_found when the supabase call errors', async () => {
+    mockQueue.push({ data: null, error: { message: 'boom' } });
+    const result = await abandonChallenge('c1');
+    expect(result).toEqual({ ok: false, error: 'not_found' });
   });
 });
