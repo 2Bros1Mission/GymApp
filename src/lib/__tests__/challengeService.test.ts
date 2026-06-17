@@ -5,6 +5,7 @@ import {
   getDiscoveryPool,
   getActiveChallenges,
   abandonChallenge,
+  reportProgress,
 } from '../challengeService';
 
 // Supabase mock — use a per-table mockQueue of results so each .from()
@@ -639,5 +640,53 @@ describe('abandonChallenge', () => {
     mockQueue.push({ data: null, error: { message: 'boom' } });
     const result = await abandonChallenge('c1');
     expect(result).toEqual({ ok: false, error: 'not_found' });
+  });
+});
+
+describe('reportProgress', () => {
+  beforeEach(() => {
+    mockQueue.length = 0;
+    mockQueries.length = 0;
+    mockRpc.mockReset();
+  });
+
+  it('returns newProgress and completed=false for in-progress update', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { ok: true, new_progress: 3, completed: false },
+      error: null,
+    });
+    const result = await reportProgress('c1', 1);
+    expect(result).toEqual({ ok: true, newProgress: 3, completed: false });
+    expect(mockRpc).toHaveBeenCalledWith('fn_report_progress', {
+      p_challenge_id: 'c1',
+      p_value: 1,
+    });
+  });
+
+  it('returns completed=true when the RPC reports completion', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { ok: true, new_progress: 10, completed: true },
+      error: null,
+    });
+    const result = await reportProgress('c1', 5);
+    expect(result).toEqual({ ok: true, newProgress: 10, completed: true });
+  });
+
+  it.each([
+    'not_self_reported',
+    'not_active',
+    'invalid_value',
+    'not_found',
+    'unauthenticated',
+  ] as const)('propagates RPC error code: %s', async (err) => {
+    mockRpc.mockResolvedValueOnce({ data: { ok: false, error: err }, error: null });
+    const result = await reportProgress('c1', 1);
+    expect(result).toEqual({ ok: false, error: err });
+  });
+
+  it('returns unknown when supabase RPC fails', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
+    const result = await reportProgress('c1', 1);
+    expect(result).toEqual({ ok: false, error: 'unknown' });
   });
 });

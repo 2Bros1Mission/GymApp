@@ -570,3 +570,40 @@ export async function abandonChallenge(challengeId: string): Promise<AbandonResu
   if (rows.length === 0) return { ok: false, error: 'not_active' };
   return { ok: true };
 }
+
+/**
+ * Reports incremental progress on a `custom_self_reported` challenge.
+ * Calls `fn_report_progress` server-side — atomic transaction with row
+ * lock prevents double-completion. Returns ReportResult with newProgress
+ * (capped at target) and completed flag.
+ */
+export async function reportProgress(
+  challengeId: string,
+  value: number
+): Promise<ReportResult> {
+  const { data, error } = await sb.rpc('fn_report_progress', {
+    p_challenge_id: challengeId,
+    p_value: value,
+  });
+
+  if (error) {
+    return { ok: false, error: 'unknown' };
+  }
+
+  const result = (data ?? {}) as {
+    ok?: boolean;
+    error?: ReportProgressError;
+    new_progress?: number;
+    completed?: boolean;
+  };
+
+  if (result.ok) {
+    return {
+      ok: true,
+      newProgress: result.new_progress,
+      completed: result.completed,
+    };
+  }
+
+  return { ok: false, error: result.error ?? 'unknown' };
+}
