@@ -563,9 +563,14 @@ export async function getActiveChallenges(
       isStreakBroken: isStreak
         ? participant.longestStreak > participant.currentProgress
         : false,
-      streakComebackDiff: isStreak
-        ? participant.longestStreak - participant.currentProgress
-        : null,
+      // Only emit a positive diff when the user is genuinely behind their
+      // record. Once currentProgress >= longestStreak, the user is at or
+      // beating their best — surfacing a negative "−3 days lost" makes no
+      // sense, so we return null in that case (and for non-streak types).
+      streakComebackDiff:
+        isStreak && participant.longestStreak > participant.currentProgress
+          ? participant.longestStreak - participant.currentProgress
+          : null,
     };
   });
 }
@@ -577,9 +582,18 @@ export async function getActiveChallenges(
  * when zero rows match (already abandoned, completed, or never joined).
  */
 export async function abandonChallenge(challengeId: string): Promise<AbandonResult> {
+  // Resolve the session user for an explicit `user_id` filter (defense in
+  // depth alongside the RLS policy from #130). If RLS is ever relaxed by a
+  // future migration, this prevents a horizontal-privilege escalation
+  // where any authenticated user could abandon another user's row.
+  const session = await supabase.auth.getSession();
+  const userId = session.data.session?.user.id;
+  if (!userId) return { ok: false, error: 'unknown' };
+
   const { data, error } = await sb
     .from('challenge_participants')
     .update({ status: 'abandoned' })
+    .eq('user_id', userId)
     .eq('challenge_id', challengeId)
     .eq('status', 'active')
     .select('id');

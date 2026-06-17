@@ -63,10 +63,15 @@ function mockMakeChain(table: string): unknown {
   return chain;
 }
 
+const mockGetSession = jest.fn();
+
 jest.mock('../supabase', () => ({
   supabase: {
     from: (table: string) => mockMakeChain(table),
     rpc: (...args: unknown[]) => mockRpc(...args),
+    auth: {
+      getSession: () => mockGetSession(),
+    },
   },
 }));
 
@@ -74,6 +79,11 @@ beforeEach(() => {
   mockQueue.length = 0;
   mockQueries.length = 0;
   mockRpc.mockReset();
+  mockGetSession.mockReset();
+  // Default to an authenticated session — individual tests can override.
+  mockGetSession.mockResolvedValue({
+    data: { session: { user: { id: 'session-user' } } },
+  });
 });
 
 // ─── pickChallenge ──────────────────────────────────────────────────────────
@@ -488,6 +498,52 @@ describe('getActiveChallenges', () => {
     expect(result[0].streakComebackDiff).toBe(5);
   });
 
+  it('returns null streakComebackDiff when user is at or beating their record', async () => {
+    // currentProgress (8) >= longestStreak (7) → not in comeback mode.
+    // Without the guard this would surface as -1 ("−1 days lost"), which is nonsense.
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 8,
+          longest_streak: 7,
+          target_value: 10,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'Streak',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'streak',
+            cadence: 'daily',
+            difficulty: 'easy',
+            target_value: 10,
+            points: 50,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result[0].isStreakBroken).toBe(false);
+    expect(result[0].streakComebackDiff).toBeNull();
+  });
+
   it('does not compute streak fields for frequency challenges', async () => {
     mockQueue.push({
       data: [
@@ -698,6 +754,23 @@ describe('abandonChallenge', () => {
     expect(result).toEqual({ ok: false, error: 'unknown' });
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
+  });
+
+  it('returns unknown when no session is present', async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
+    const result = await abandonChallenge('c1');
+    expect(result).toEqual({ ok: false, error: 'unknown' });
+    // No DB query should have been issued.
+    expect(mockQueries).toHaveLength(0);
+  });
+
+  it('filters on user_id from the session (defense-in-depth)', async () => {
+    mockQueue.push({ data: [{ id: 'p1' }], error: null });
+    await abandonChallenge('c1');
+    const userIdFilter = mockQueries[0].filters.find(
+      (f) => f.method === 'eq' && f.args[0] === 'user_id'
+    );
+    expect(userIdFilter?.args[1]).toBe('session-user');
   });
 });
 

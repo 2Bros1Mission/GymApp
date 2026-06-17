@@ -30,7 +30,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'unauthenticated');
   end if;
 
-  if p_value <= 0 then
+  -- Upper bound guards against integer overflow on `current_progress + p_value`
+  -- (would surface as a generic Postgres error mapped to 'unknown'). 100000
+  -- is an order of magnitude above any realistic per-call target value.
+  if p_value <= 0 or p_value > 100000 then
     return jsonb_build_object('ok', false, 'error', 'invalid_value');
   end if;
 
@@ -51,6 +54,14 @@ begin
   select * into v_challenge
   from public.challenges
   where id = p_challenge_id;
+
+  -- Defensive: FK with on-delete-cascade should make this unreachable, but
+  -- without this guard a missing row produces NULL fields that fall through
+  -- the type check (NULL != 'custom_self_reported' is NULL, which is falsy)
+  -- and the function would silently update with NULL values.
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
 
   if v_challenge.challenge_type != 'custom_self_reported' then
     return jsonb_build_object('ok', false, 'error', 'not_self_reported');
