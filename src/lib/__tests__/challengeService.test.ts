@@ -3,6 +3,7 @@ import {
   getUserChallengeState,
   getUserChallengeProgress,
   getDiscoveryPool,
+  getActiveChallenges,
 } from '../challengeService';
 
 // Supabase mock — use a per-table mockQueue of results so each .from()
@@ -418,5 +419,194 @@ describe('getDiscoveryPool', () => {
     const out = await getDiscoveryPool('user-1');
 
     expect(out.daily.every((c) => c.state === 'limit_reached')).toBe(true);
+  });
+});
+
+describe('getActiveChallenges', () => {
+  beforeEach(() => {
+    mockQueue.length = 0;
+    mockQueries.length = 0;
+    mockRpc.mockReset();
+  });
+
+  it('returns empty array when user has no active challenges', async () => {
+    mockQueue.push({ data: [], error: null });
+    const result = await getActiveChallenges('user-1');
+    expect(result).toEqual([]);
+  });
+
+  it('marks streak as broken when longestStreak > currentProgress', async () => {
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 2,
+          longest_streak: 7,
+          target_value: 10,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'Streak',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'streak',
+            cadence: 'daily',
+            difficulty: 'easy',
+            target_value: 10,
+            points: 50,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].isStreakBroken).toBe(true);
+    expect(result[0].streakComebackDiff).toBe(5);
+  });
+
+  it('does not compute streak fields for frequency challenges', async () => {
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 1,
+          longest_streak: 3,
+          target_value: 5,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'Freq',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'frequency',
+            cadence: 'weekly',
+            difficulty: 'easy',
+            target_value: 5,
+            points: 30,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result[0].isStreakBroken).toBe(false);
+    expect(result[0].streakComebackDiff).toBeNull();
+  });
+
+  it('caps progressPercentage at 100', async () => {
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 15,
+          longest_streak: 0,
+          target_value: 10,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'X',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'frequency',
+            cadence: 'daily',
+            difficulty: 'easy',
+            target_value: 10,
+            points: 10,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result[0].progressPercentage).toBe(100);
+  });
+
+  it('returns endDate as timeRemaining for one_time trainer challenge', async () => {
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 0,
+          longest_streak: 0,
+          target_value: 1,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'trainer_assigned',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: null,
+            creator_id: 'trainer-1',
+            source: 'trainer',
+            title: 'One time',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'custom_self_reported',
+            cadence: 'one_time',
+            difficulty: null,
+            target_value: 1,
+            points: 0,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: '2026-12-31T00:00:00Z',
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result[0].timeRemaining).toBe('2026-12-31T00:00:00Z');
   });
 });

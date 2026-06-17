@@ -502,3 +502,51 @@ export async function getUserChallengeState(userId: string): Promise<UserChallen
     };
   });
 }
+
+// ─── My Challenges ──────────────────────────────────────────────────────────
+
+/**
+ * Returns the user's active challenges with derived UI fields
+ * (progress %, deadline, streak-comeback signals). For streak-type
+ * challenges, the trigger from #133 writes the current streak count
+ * into `current_progress`, so `currentProgress` IS the current streak.
+ *
+ * Comeback fields are populated only for `challengeType === 'streak'`;
+ * for frequency / custom types they are `false` / `null` because
+ * `longestStreak` is not meaningful in those contexts.
+ */
+export async function getActiveChallenges(
+  userId: string
+): Promise<ActiveChallengeWithDetails[]> {
+  const { data, error } = await sb
+    .from('challenge_participants')
+    .select('*, challenge:challenges(*)')
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
+  if (error) throw new Error(error.message);
+
+  const now = new Date();
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
+    const participant = mapRowToParticipant(row);
+    const challenge = participant.challenge;
+    const progressPercentage = Math.min(
+      100,
+      (participant.currentProgress / participant.targetValue) * 100
+    );
+    const timeRemaining = computeDeadline(challenge.cadence, now, challenge.endDate);
+    const isStreak = challenge.challengeType === 'streak';
+    return {
+      participant,
+      challenge,
+      progressPercentage,
+      timeRemaining,
+      isStreakBroken: isStreak
+        ? participant.longestStreak > participant.currentProgress
+        : false,
+      streakComebackDiff: isStreak
+        ? participant.longestStreak - participant.currentProgress
+        : null,
+    };
+  });
+}
