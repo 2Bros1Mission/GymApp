@@ -74,9 +74,13 @@ begin
       where id = v_user_id;
     end if;
 
-    -- Bump completions_this_period for custom challenges (frequency/streak
-    -- challenges go through the #133 trigger, which updates this on its own).
-    if v_challenge.cadence in ('daily', 'weekly', 'monthly') then
+    -- Bump completions_this_period for platform custom challenges only.
+    -- The #133 trigger gates the same bump on source='platform'; trainer
+    -- challenges must NOT touch this counter because it drives the
+    -- platform-discovery pool limits (MAX_COMPLETIONS per cadence).
+    -- Frequency/streak challenges flow through the #133 trigger instead.
+    if v_challenge.source = 'platform'
+       and v_challenge.cadence in ('daily', 'weekly', 'monthly') then
       update public.user_challenge_state
       set completions_this_period = completions_this_period + 1
       where user_id = v_user_id and cadence = v_challenge.cadence;

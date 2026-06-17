@@ -616,6 +616,59 @@ describe('getActiveChallenges', () => {
     const result = await getActiveChallenges('user-1');
     expect(result[0].timeRemaining).toBe('2026-12-31T00:00:00Z');
   });
+
+  it('computes daily timeRemaining across the spring DST boundary using the target offset', async () => {
+    // Sofia spring forward (EET→EEST) is the last Sunday of March at 03:00 local.
+    // 2026: that's 2026-03-29. "Now" = 2026-03-28 20:00 UTC (22:00 Sofia EET, UTC+2),
+    // so today's 4AM has passed → next 4AM is 2026-03-29 04:00 Sofia, which is
+    // EEST (UTC+3) → 2026-03-29 01:00Z. Using the `now` offset (+120) would
+    // incorrectly produce 02:00Z.
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-28T20:00:00Z'));
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 0,
+          longest_streak: 0,
+          target_value: 1,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'D',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'frequency',
+            cadence: 'daily',
+            difficulty: 'easy',
+            target_value: 1,
+            points: 10,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    try {
+      const result = await getActiveChallenges('user-1');
+      expect(result[0].timeRemaining).toBe('2026-03-29T01:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('abandonChallenge', () => {
@@ -637,10 +690,13 @@ describe('abandonChallenge', () => {
     expect(result).toEqual({ ok: false, error: 'not_active' });
   });
 
-  it('returns not_found when the supabase call errors', async () => {
+  it('returns unknown when the supabase call errors', async () => {
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockQueue.push({ data: null, error: { message: 'boom' } });
     const result = await abandonChallenge('c1');
-    expect(result).toEqual({ ok: false, error: 'not_found' });
+    expect(result).toEqual({ ok: false, error: 'unknown' });
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });
 
@@ -686,9 +742,12 @@ describe('reportProgress', () => {
   });
 
   it('returns unknown when supabase RPC fails', async () => {
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
     const result = await reportProgress('c1', 1);
     expect(result).toEqual({ ok: false, error: 'unknown' });
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });
 

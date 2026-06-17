@@ -334,8 +334,11 @@ function computeDeadline(
     target = new Date(Date.UTC(sofiaYear, sofiaMonth + 1, 1, 4, 0, 0));
   }
 
-  // Shift the Sofia-local target back to true UTC.
-  return new Date(target.getTime() - offsetMin * 60000).toISOString();
+  // Shift the Sofia-local target back to true UTC. Use the offset at the
+  // TARGET instant, not at `now` — otherwise a deadline that crosses the
+  // DST boundary (spring or autumn) is off by one hour twice a year.
+  const targetOffsetMin = sofiaOffsetMinutes(target);
+  return new Date(target.getTime() - targetOffsetMin * 60000).toISOString();
 }
 
 // ─── My-Challenges types (#137) ─────────────────────────────────────────────
@@ -353,7 +356,7 @@ export interface ActiveChallengeWithDetails {
 
 export interface AbandonResult {
   ok: boolean;
-  error?: 'not_found' | 'not_active';
+  error?: 'not_active' | 'unknown';
 }
 
 export type ReportProgressError =
@@ -565,7 +568,10 @@ export async function abandonChallenge(challengeId: string): Promise<AbandonResu
     .eq('status', 'active')
     .select('id');
 
-  if (error) return { ok: false, error: 'not_found' };
+  if (error) {
+    console.error('abandonChallenge failed', error);
+    return { ok: false, error: 'unknown' };
+  }
   const rows = (data ?? []) as { id: string }[];
   if (rows.length === 0) return { ok: false, error: 'not_active' };
   return { ok: true };
@@ -587,6 +593,7 @@ export async function reportProgress(
   });
 
   if (error) {
+    console.error('fn_report_progress failed', error);
     return { ok: false, error: 'unknown' };
   }
 
