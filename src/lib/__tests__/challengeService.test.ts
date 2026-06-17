@@ -6,6 +6,7 @@ import {
   getActiveChallenges,
   abandonChallenge,
   reportProgress,
+  getChallengeHistory,
 } from '../challengeService';
 
 // Supabase mock — use a per-table mockQueue of results so each .from()
@@ -688,5 +689,41 @@ describe('reportProgress', () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'boom' } });
     const result = await reportProgress('c1', 1);
     expect(result).toEqual({ ok: false, error: 'unknown' });
+  });
+});
+
+describe('getChallengeHistory', () => {
+  beforeEach(() => {
+    mockQueue.length = 0;
+    mockQueries.length = 0;
+    mockRpc.mockReset();
+  });
+
+  it('returns empty array when user has no history', async () => {
+    mockQueue.push({ data: [], error: null });
+    const result = await getChallengeHistory('user-1');
+    expect(result).toEqual([]);
+  });
+
+  it('uses default limit of 20', async () => {
+    mockQueue.push({ data: [], error: null });
+    await getChallengeHistory('user-1');
+    const limitFilter = mockQueries[0].filters.find((f) => f.method === 'limit');
+    expect(limitFilter?.args[0]).toBe(20);
+  });
+
+  it('passes through custom limit', async () => {
+    mockQueue.push({ data: [], error: null });
+    await getChallengeHistory('user-1', 50);
+    const limitFilter = mockQueries[0].filters.find((f) => f.method === 'limit');
+    expect(limitFilter?.args[0]).toBe(50);
+  });
+
+  it('filters status to completed and abandoned', async () => {
+    mockQueue.push({ data: [], error: null });
+    await getChallengeHistory('user-1');
+    const inFilter = mockQueries[0].filters.find((f) => f.method === 'in');
+    expect(inFilter?.args[0]).toBe('status');
+    expect(inFilter?.args[1]).toEqual(['completed', 'abandoned']);
   });
 });

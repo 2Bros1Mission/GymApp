@@ -607,3 +607,24 @@ export async function reportProgress(
 
   return { ok: false, error: result.error ?? 'unknown' };
 }
+
+/**
+ * Returns the user's completed and abandoned challenges, newest first.
+ * Default limit 20; pass a different value for paginated history views.
+ */
+export async function getChallengeHistory(
+  userId: string,
+  limit: number = 20
+): Promise<ChallengeParticipant[]> {
+  const { data, error } = await sb
+    .from('challenge_participants')
+    .select('*, challenge:challenges(*)')
+    .eq('user_id', userId)
+    .in('status', ['completed', 'abandoned'])
+    .order('completed_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapRowToParticipant);
+}
