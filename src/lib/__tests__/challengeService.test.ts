@@ -7,6 +7,7 @@ import {
   abandonChallenge,
   reportProgress,
   getChallengeHistory,
+  _computeDeadlineForTest as computeDeadline,
 } from '../challengeService';
 
 // Supabase mock — use a per-table mockQueue of results so each .from()
@@ -784,5 +785,121 @@ describe('getChallengeHistory', () => {
     const inFilter = mockQueries[0].filters.find((f) => f.method === 'in');
     expect(inFilter?.args[0]).toBe('status');
     expect(inFilter?.args[1]).toEqual(['completed', 'abandoned']);
+  });
+});
+
+describe('computeDeadline (4AM Sofia boundary)', () => {
+  // All `now` instants are UTC. Sofia = UTC+2 (EET) winter, UTC+3 (EEST) summer.
+  // Spring-forward 2026: last Sun of March = 2026-03-29.
+  // Fall-back 2026: last Sun of October = 2026-10-25.
+
+  describe('daily', () => {
+    it('before 4AM Sofia → today 4AM', () => {
+      // 2026-02-10 01:00 Sofia (EET, UTC+2) = 2025... wait, 2026-02-09 23:00 UTC.
+      // 4AM Sofia today = 2026-02-10 04:00 EET = 2026-02-10 02:00 UTC.
+      const now = new Date('2026-02-09T23:00:00Z');
+      expect(computeDeadline('daily', now, null)).toBe('2026-02-10T02:00:00.000Z');
+    });
+
+    it('after 4AM Sofia → tomorrow 4AM (winter, UTC+2)', () => {
+      // 2026-02-10 10:00 Sofia = 2026-02-10 08:00 UTC. Tomorrow 4AM Sofia = 2026-02-11 02:00 UTC.
+      const now = new Date('2026-02-10T08:00:00Z');
+      expect(computeDeadline('daily', now, null)).toBe('2026-02-11T02:00:00.000Z');
+    });
+
+    it('after 4AM Sofia → tomorrow 4AM (summer, UTC+3)', () => {
+      // 2026-07-15 10:00 Sofia (EEST) = 2026-07-15 07:00 UTC. Tomorrow 4AM Sofia = 2026-07-16 01:00 UTC.
+      const now = new Date('2026-07-15T07:00:00Z');
+      expect(computeDeadline('daily', now, null)).toBe('2026-07-16T01:00:00.000Z');
+    });
+  });
+
+  describe('weekly', () => {
+    it('Tuesday → next Monday 4AM Sofia (summer)', () => {
+      // 2026-07-14 (Tue) 10:00 Sofia EEST = 2026-07-14 07:00 UTC.
+      // Next Mon = 2026-07-20 04:00 Sofia EEST = 2026-07-20 01:00 UTC.
+      const now = new Date('2026-07-14T07:00:00Z');
+      expect(computeDeadline('weekly', now, null)).toBe('2026-07-20T01:00:00.000Z');
+    });
+
+    it('Sunday → next Monday 4AM Sofia (winter)', () => {
+      // 2026-02-15 (Sun) 14:00 Sofia EET = 2026-02-15 12:00 UTC.
+      // Next Mon = 2026-02-16 04:00 Sofia EET = 2026-02-16 02:00 UTC.
+      const now = new Date('2026-02-15T12:00:00Z');
+      expect(computeDeadline('weekly', now, null)).toBe('2026-02-16T02:00:00.000Z');
+    });
+
+    it('Monday before 4AM Sofia → today 4AM (not next week)', () => {
+      // 2026-02-16 (Mon) 02:00 Sofia EET = 2026-02-16 00:00 UTC.
+      // Today 4AM Sofia EET = 2026-02-16 02:00 UTC.
+      const now = new Date('2026-02-16T00:00:00Z');
+      expect(computeDeadline('weekly', now, null)).toBe('2026-02-16T02:00:00.000Z');
+    });
+
+    it('Monday after 4AM Sofia → next Monday 4AM (7 days later)', () => {
+      // 2026-02-16 (Mon) 10:00 Sofia EET = 2026-02-16 08:00 UTC.
+      // Next Mon = 2026-02-23 04:00 Sofia EET = 2026-02-23 02:00 UTC.
+      const now = new Date('2026-02-16T08:00:00Z');
+      expect(computeDeadline('weekly', now, null)).toBe('2026-02-23T02:00:00.000Z');
+    });
+  });
+
+  describe('monthly', () => {
+    it('mid-month → 1st of next month 4AM (winter)', () => {
+      // 2026-02-15 12:00 Sofia EET = 2026-02-15 10:00 UTC.
+      // Next 1st = 2026-03-01 04:00 Sofia EET = 2026-03-01 02:00 UTC.
+      const now = new Date('2026-02-15T10:00:00Z');
+      expect(computeDeadline('monthly', now, null)).toBe('2026-03-01T02:00:00.000Z');
+    });
+
+    it('mid-month → 1st of next month 4AM (summer)', () => {
+      // 2026-07-15 12:00 Sofia EEST = 2026-07-15 09:00 UTC.
+      // Next 1st = 2026-08-01 04:00 Sofia EEST = 2026-08-01 01:00 UTC.
+      const now = new Date('2026-07-15T09:00:00Z');
+      expect(computeDeadline('monthly', now, null)).toBe('2026-08-01T01:00:00.000Z');
+    });
+
+    it('December → January 1 of next year', () => {
+      // 2026-12-15 12:00 Sofia EET = 2026-12-15 10:00 UTC.
+      // Next 1st = 2027-01-01 04:00 Sofia EET = 2027-01-01 02:00 UTC.
+      const now = new Date('2026-12-15T10:00:00Z');
+      expect(computeDeadline('monthly', now, null)).toBe('2027-01-01T02:00:00.000Z');
+    });
+  });
+
+  describe('DST boundaries (target offset, not now offset)', () => {
+    it('spring forward: daily across last Sunday of March', () => {
+      // 2026-03-28 (Sat) 20:00 UTC = 22:00 Sofia EET (UTC+2, pre-DST).
+      // Today's 4AM already past → tomorrow 4AM Sofia EEST (UTC+3) = 2026-03-29 01:00 UTC.
+      // Using `now` offset (+120) would produce 02:00 UTC — that's the bug we fixed.
+      const now = new Date('2026-03-28T20:00:00Z');
+      expect(computeDeadline('daily', now, null)).toBe('2026-03-29T01:00:00.000Z');
+    });
+
+    it('fall back: daily across last Sunday of October', () => {
+      // 2026-10-24 (Sat) 20:00 UTC = 23:00 Sofia EEST (UTC+3, pre-fallback).
+      // Today's 4AM already past → tomorrow 4AM Sofia EET (UTC+2) = 2026-10-25 02:00 UTC.
+      // Using `now` offset (+180) would produce 01:00 UTC.
+      const now = new Date('2026-10-24T20:00:00Z');
+      expect(computeDeadline('daily', now, null)).toBe('2026-10-25T02:00:00.000Z');
+    });
+
+    it('spring forward: monthly across April 1 returns EEST UTC', () => {
+      // 2026-03-15 mid-month EET → next 1st is 2026-04-01 04:00 EEST = 2026-04-01 01:00 UTC.
+      const now = new Date('2026-03-15T10:00:00Z');
+      expect(computeDeadline('monthly', now, null)).toBe('2026-04-01T01:00:00.000Z');
+    });
+  });
+
+  describe('one_time', () => {
+    it('returns endDate as-is', () => {
+      expect(computeDeadline('one_time', new Date('2026-01-01T00:00:00Z'), '2026-12-31T00:00:00Z')).toBe(
+        '2026-12-31T00:00:00Z'
+      );
+    });
+
+    it('returns null when endDate is null', () => {
+      expect(computeDeadline('one_time', new Date('2026-01-01T00:00:00Z'), null)).toBeNull();
+    });
   });
 });

@@ -303,6 +303,17 @@ function sofiaOffsetMinutes(at: Date): number {
   return Math.round((asIfUtc - at.getTime()) / 60000);
 }
 
+// Exported for tests; not part of the public service API. Callers should
+// consume `timeRemaining` on ActiveChallengeWithDetails instead of calling
+// this directly. Marked with the underscore prefix to signal "internal".
+export function _computeDeadlineForTest(
+  cadence: 'daily' | 'weekly' | 'monthly' | 'one_time',
+  now: Date,
+  endDate: string | null
+): string | null {
+  return computeDeadline(cadence, now, endDate);
+}
+
 function computeDeadline(
   cadence: 'daily' | 'weekly' | 'monthly' | 'one_time',
   now: Date,
@@ -527,16 +538,21 @@ export async function getActiveChallenges(
     .eq('user_id', userId)
     .eq('status', 'active');
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('getActiveChallenges failed', error);
+    throw new Error(error.message);
+  }
 
   const now = new Date();
   return ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
     const participant = mapRowToParticipant(row);
     const challenge = participant.challenge;
-    const progressPercentage = Math.min(
-      100,
-      (participant.currentProgress / participant.targetValue) * 100
-    );
+    // Guard against targetValue=0 (defensive — DB has no CHECK on the column).
+    // Without this, division yields NaN/Infinity and the UI renders "NaN%".
+    const progressPercentage =
+      participant.targetValue > 0
+        ? Math.min(100, (participant.currentProgress / participant.targetValue) * 100)
+        : 0;
     const timeRemaining = computeDeadline(challenge.cadence, now, challenge.endDate);
     const isStreak = challenge.challengeType === 'streak';
     return {
@@ -631,7 +647,10 @@ export async function getChallengeHistory(
     .order('completed_at', { ascending: false, nullsFirst: false })
     .limit(limit);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('getChallengeHistory failed', error);
+    throw new Error(error.message);
+  }
 
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapRowToParticipant);
 }

@@ -98,3 +98,9 @@ begin
   );
 end;
 $$;
+
+-- Restrict execution to authenticated users (matches fn_pick_challenge convention).
+-- The function's own auth.uid() guard returns 'unauthenticated' if reached anonymously,
+-- but we revoke PUBLIC explicitly so the function surface isn't exposed to anon.
+revoke execute on function public.fn_report_progress(uuid, integer) from public;
+grant execute on function public.fn_report_progress(uuid, integer) to authenticated;
