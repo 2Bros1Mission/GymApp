@@ -66,7 +66,7 @@ sb.from('challenge_participants')
 ```typescript
 interface AbandonResult {
   ok: boolean;
-  error?: 'not_found' | 'not_active';
+  error?: 'not_active' | 'unknown';
 }
 
 export async function abandonChallenge(challengeId: string): Promise<AbandonResult>
@@ -81,12 +81,15 @@ const { data, error } = await sb
   .eq('status', 'active')
   .select('id');
 
-if (error) return { ok: false, error: 'not_found' };
+if (error) {
+  console.error('abandonChallenge failed', error);
+  return { ok: false, error: 'unknown' };
+}
 if (!data || data.length === 0) return { ok: false, error: 'not_active' };
 return { ok: true };
 ```
 
-Note: `not_found` and `not_active` are merged from the client's perspective (both look like "no row matched"). If row count is 0 we report `not_active` since the more common case is the user clicking twice; an actual missing row is rare and RLS-filtered.
+Note: error codes are `'not_active'` (zero rows updated — already abandoned, completed, or never joined; also the path for an unauthenticated or cross-user attempt under RLS) and `'unknown'` (DB error, logged via `console.error`). The earlier `'not_found'` code was dropped because RLS makes the "row exists for some other user" case indistinguishable from "row does not exist" at the client.
 
 ### 3. `reportProgress(challengeId: string, value: number)`
 
@@ -261,7 +264,7 @@ Extend `src/lib/__tests__/challengeService.test.ts` using existing `mockQueue` a
 **`abandonChallenge`:**
 - Success → `{ ok: true }`
 - Zero rows updated → `{ ok: false, error: 'not_active' }`
-- DB error → `{ ok: false, error: 'not_found' }`
+- DB error → `{ ok: false, error: 'unknown' }` (logged via `console.error`)
 
 **`reportProgress`:**
 - Successful in-progress update → `{ ok: true, newProgress: N, completed: false }`

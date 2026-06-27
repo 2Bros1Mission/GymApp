@@ -277,18 +277,24 @@ export interface PickChallengeResult {
 // in winter and UTC+3 (EEST) in summer. We rely on Intl.DateTimeFormat
 // for the offset rather than hardcoding DST rules.
 
+// Hoisted to module scope: constructing Intl.DateTimeFormat is heavy (pulls
+// in tz data and compiles a formatter), and the options never vary. Calling
+// sofiaOffsetMinutes once per active challenge meant N allocations per
+// render — now exactly one allocation for the whole module lifetime.
+const SOFIA_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Sofia',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
 function sofiaOffsetMinutes(at: Date): number {
   // Asia approach: format the moment in Sofia and compute UTC delta.
-  const sofiaParts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Sofia',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(at);
+  const sofiaParts = SOFIA_FORMATTER.formatToParts(at);
   const m: Record<string, string> = {};
   for (const p of sofiaParts) if (p.type !== 'literal') m[p.type] = p.value;
   // Reconstruct as if Sofia local time were UTC, then diff against the real UTC.
@@ -349,7 +355,19 @@ function computeDeadline(
   // TARGET instant, not at `now` — otherwise a deadline that crosses the
   // DST boundary (spring or autumn) is off by one hour twice a year.
   const targetOffsetMin = sofiaOffsetMinutes(target);
-  return new Date(target.getTime() - targetOffsetMin * 60000).toISOString();
+  const targetUtc = new Date(target.getTime() - targetOffsetMin * 60000);
+
+  // Clamp to challenge.endDate: a daily/weekly/monthly challenge whose end
+  // date has passed must not advertise a future "next 4AM" deadline. The
+  // participant row can outlive the challenge (no auto-expire trigger), so
+  // computeDeadline is the last line of defense for the UI.
+  if (endDate) {
+    const end = new Date(endDate);
+    if (end.getTime() < targetUtc.getTime()) {
+      return end.toISOString();
+    }
+  }
+  return targetUtc.toISOString();
 }
 
 // ─── My-Challenges types (#137) ─────────────────────────────────────────────
@@ -540,60 +558,67 @@ export async function getActiveChallenges(
 
   if (error) {
     console.error('getActiveChallenges failed', error);
-    throw new Error(error.message);
+    throw new Error('Failed to load active challenges');
   }
 
   const now = new Date();
-  return ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
-    const participant = mapRowToParticipant(row);
-    const challenge = participant.challenge;
-    // Guard against targetValue=0 (defensive — DB has no CHECK on the column).
-    // Without this, division yields NaN/Infinity and the UI renders "NaN%".
-    const progressPercentage =
-      participant.targetValue > 0
-        ? Math.min(100, (participant.currentProgress / participant.targetValue) * 100)
-        : 0;
-    const timeRemaining = computeDeadline(challenge.cadence, now, challenge.endDate);
-    const isStreak = challenge.challengeType === 'streak';
-    return {
-      participant,
-      challenge,
-      progressPercentage,
-      timeRemaining,
-      isStreakBroken: isStreak
-        ? participant.longestStreak > participant.currentProgress
-        : false,
-      // Only emit a positive diff when the user is genuinely behind their
-      // record. Once currentProgress >= longestStreak, the user is at or
-      // beating their best — surfacing a negative "−3 days lost" makes no
-      // sense, so we return null in that case (and for non-streak types).
-      streakComebackDiff:
-        isStreak && participant.longestStreak > participant.currentProgress
-          ? participant.longestStreak - participant.currentProgress
-          : null,
-    };
-  });
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return rows
+    // Filter orphans: a participant row whose joined `challenge` is null
+    // (FK cascade should make this unreachable, but RLS can hide the parent
+    // row in tenancy edge cases). mapRowToParticipant substitutes {} for a
+    // missing challenge, which would silently produce wrong cadence and
+    // NaN progress downstream.
+    .filter((row) => row.challenge != null)
+    .map((row) => {
+      const participant = mapRowToParticipant(row);
+      const challenge = participant.challenge;
+      // `target_value > 0` is enforced by CHECK constraints on both
+      // challenges and challenge_participants (see
+      // 20260601120000_challenges_core_tables.sql), so division here is safe.
+      const progressPercentage = Math.min(
+        100,
+        (participant.currentProgress / participant.targetValue) * 100
+      );
+      const timeRemaining = computeDeadline(challenge.cadence, now, challenge.endDate);
+      const isStreak = challenge.challengeType === 'streak';
+      // For streak challenges, surface comeback info in two fields:
+      //   - isStreakBroken: strict "you are behind your previous best".
+      //   - streakComebackDiff: how far behind, in days.
+      //     - positive N: behind by N days
+      //     - 0: matched your record (UI can render a "matched!" badge)
+      //     - null: not applicable — either non-streak, or strictly beating
+      //       the previous best (negative diff is meaningless to surface).
+      const diff = participant.longestStreak - participant.currentProgress;
+      const comebackDiff = isStreak && diff >= 0 ? diff : null;
+      return {
+        participant,
+        challenge,
+        progressPercentage,
+        timeRemaining,
+        isStreakBroken: comebackDiff !== null && comebackDiff > 0,
+        streakComebackDiff: comebackDiff,
+      };
+    });
 }
 
 /**
  * Marks an active participation as abandoned. Caller's identity is
- * enforced by RLS (#130); no userId parameter is taken — matches the
- * pickChallenge pattern. Returns `{ ok: false, error: 'not_active' }`
- * when zero rows match (already abandoned, completed, or never joined).
+ * enforced by RLS (#130) — the UPDATE policy on challenge_participants
+ * requires `user_id = auth.uid()` server-side, so an unauthenticated or
+ * cross-user attempt simply matches zero rows and returns `not_active`.
+ *
+ * We deliberately do NOT call supabase.auth.getSession() here: per
+ * Supabase docs, getSession() reads local storage without server
+ * verification and can return a stale session. Putting it in front of
+ * RLS doesn't add defense — RLS catches anything getSession() catches,
+ * and adds nothing for valid sessions — while breaking UX during token
+ * refresh races. Matches the pickChallenge pattern.
  */
 export async function abandonChallenge(challengeId: string): Promise<AbandonResult> {
-  // Resolve the session user for an explicit `user_id` filter (defense in
-  // depth alongside the RLS policy from #130). If RLS is ever relaxed by a
-  // future migration, this prevents a horizontal-privilege escalation
-  // where any authenticated user could abandon another user's row.
-  const session = await supabase.auth.getSession();
-  const userId = session.data.session?.user.id;
-  if (!userId) return { ok: false, error: 'unknown' };
-
   const { data, error } = await sb
     .from('challenge_participants')
     .update({ status: 'abandoned' })
-    .eq('user_id', userId)
     .eq('challenge_id', challengeId)
     .eq('status', 'active')
     .select('id');
@@ -617,6 +642,17 @@ export async function reportProgress(
   challengeId: string,
   value: number
 ): Promise<ReportResult> {
+  // Client-side validation. The TS `number` type does NOT exclude NaN /
+  // Infinity / floats at runtime, and JSON.stringify serializes both
+  // NaN and Infinity as `null` (ECMA-262 §25.5.2). PostgREST passes JSON
+  // null through to the SQL function as NULL, which would slip past the
+  // server's `p_value <= 0 or p_value > 100000` guard via three-valued
+  // logic (NULL OR NULL → NULL → falsy). Catch it here so the typed
+  // error contract is honored.
+  if (!Number.isInteger(value) || value <= 0 || value > 100000) {
+    return { ok: false, error: 'invalid_value' };
+  }
+
   const { data, error } = await sb.rpc('fn_report_progress', {
     p_challenge_id: challengeId,
     p_value: value,
@@ -663,7 +699,7 @@ export async function getChallengeHistory(
 
   if (error) {
     console.error('getChallengeHistory failed', error);
-    throw new Error(error.message);
+    throw new Error('Failed to load challenge history');
   }
 
   return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapRowToParticipant);

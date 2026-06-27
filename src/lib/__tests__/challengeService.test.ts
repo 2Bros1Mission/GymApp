@@ -498,9 +498,10 @@ describe('getActiveChallenges', () => {
     expect(result[0].streakComebackDiff).toBe(5);
   });
 
-  it('returns null streakComebackDiff when user is at or beating their record', async () => {
-    // currentProgress (8) >= longestStreak (7) → not in comeback mode.
-    // Without the guard this would surface as -1 ("−1 days lost"), which is nonsense.
+  it('returns null streakComebackDiff when the user is strictly beating their record', async () => {
+    // currentProgress (8) > longestStreak (7) → not in comeback mode AND
+    // diff is negative ("−1 days lost"), which is nonsense to surface.
+    // Null is the right signal for "not applicable".
     mockQueue.push({
       data: [
         {
@@ -542,6 +543,83 @@ describe('getActiveChallenges', () => {
     const result = await getActiveChallenges('user-1');
     expect(result[0].isStreakBroken).toBe(false);
     expect(result[0].streakComebackDiff).toBeNull();
+  });
+
+  it('returns streakComebackDiff=0 when the user is exactly at their record', async () => {
+    // currentProgress (7) === longestStreak (7) → not broken, but
+    // the at-record case is meaningful: the UI can render a "matched
+    // your record!" badge. Distinguished from null (non-streak or
+    // beating record) by being a real number.
+    mockQueue.push({
+      data: [
+        {
+          id: 'p1',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 7,
+          longest_streak: 7,
+          target_value: 10,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'Streak',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'streak',
+            cadence: 'daily',
+            difficulty: 'easy',
+            target_value: 10,
+            points: 50,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result[0].isStreakBroken).toBe(false);
+    expect(result[0].streakComebackDiff).toBe(0);
+  });
+
+  it('filters out orphan participants whose joined challenge row is null', async () => {
+    // Defense against RLS hiding the parent challenge row while the
+    // participant row remains visible (or any FK-cascade edge case).
+    // Before the filter, mapRowToParticipant would substitute {} and
+    // downstream computeDeadline / progressPercentage would emit
+    // wrong-cadence deadlines and NaN%. Now the row is dropped.
+    mockQueue.push({
+      data: [
+        {
+          id: 'orphan',
+          challenge_id: 'missing',
+          user_id: 'user-1',
+          current_progress: 1,
+          longest_streak: 0,
+          target_value: 5,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: null,
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result).toEqual([]);
   });
 
   it('does not compute streak fields for frequency challenges', async () => {
@@ -756,21 +834,23 @@ describe('abandonChallenge', () => {
     errSpy.mockRestore();
   });
 
-  it('returns unknown when no session is present', async () => {
-    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
-    const result = await abandonChallenge('c1');
-    expect(result).toEqual({ ok: false, error: 'unknown' });
-    // No DB query should have been issued.
-    expect(mockQueries).toHaveLength(0);
+  it('does not call auth.getSession — relies on RLS for ownership', async () => {
+    // We dropped the client-side getSession() defense-in-depth: per
+    // Supabase docs, getSession() reads local storage without server
+    // verification and adds nothing in front of RLS. abandonChallenge
+    // should issue the UPDATE directly with no session resolution.
+    mockQueue.push({ data: [{ id: 'p1' }], error: null });
+    await abandonChallenge('c1');
+    expect(mockGetSession).not.toHaveBeenCalled();
   });
 
-  it('filters on user_id from the session (defense-in-depth)', async () => {
+  it('does NOT filter by user_id client-side (RLS enforces it)', async () => {
     mockQueue.push({ data: [{ id: 'p1' }], error: null });
     await abandonChallenge('c1');
     const userIdFilter = mockQueries[0].filters.find(
       (f) => f.method === 'eq' && f.args[0] === 'user_id'
     );
-    expect(userIdFilter?.args[1]).toBe('session-user');
+    expect(userIdFilter).toBeUndefined();
   });
 });
 
@@ -822,6 +902,25 @@ describe('reportProgress', () => {
     expect(result).toEqual({ ok: false, error: 'unknown' });
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
+  });
+
+  // Client-side validation: TS `number` type does NOT exclude NaN /
+  // Infinity / floats at runtime, and JSON.stringify(NaN) === 'null'
+  // per ECMA-262 §25.5.2 — passing one of these to the RPC would
+  // surface as opaque 'unknown' from the column NOT NULL constraint.
+  // Catch them at the boundary instead.
+  it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
+    ['zero', 0],
+    ['negative', -1],
+    ['float', 1.5],
+    ['too large', 100001],
+  ] as const)('returns invalid_value (and skips the RPC) for %s', async (_label, value) => {
+    const result = await reportProgress('c1', value);
+    expect(result).toEqual({ ok: false, error: 'invalid_value' });
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
 
@@ -973,6 +1072,41 @@ describe('computeDeadline (4AM Sofia boundary)', () => {
 
     it('returns null when endDate is null', () => {
       expect(computeDeadline('one_time', new Date('2026-01-01T00:00:00Z'), null)).toBeNull();
+    });
+  });
+
+  describe('endDate clamp (R1 — daily/weekly/monthly past challenge end)', () => {
+    // A daily/weekly/monthly challenge whose end_date has passed should
+    // surface the challenge's end as the deadline, not "next 4AM" rolling
+    // forward forever. Participant rows can outlive the challenge if no
+    // auto-expire trigger has fired yet.
+    it('daily: returns endDate when it is before next 4AM', () => {
+      const now = new Date('2026-02-10T08:00:00Z'); // weeks past end
+      expect(computeDeadline('daily', now, '2026-01-15T00:00:00Z')).toBe(
+        '2026-01-15T00:00:00.000Z'
+      );
+    });
+
+    it('weekly: returns endDate when it is before next Monday 4AM', () => {
+      const now = new Date('2026-02-15T12:00:00Z');
+      expect(computeDeadline('weekly', now, '2026-01-15T00:00:00Z')).toBe(
+        '2026-01-15T00:00:00.000Z'
+      );
+    });
+
+    it('monthly: returns endDate when it is before 1st of next month', () => {
+      const now = new Date('2026-03-15T10:00:00Z');
+      expect(computeDeadline('monthly', now, '2026-02-01T00:00:00Z')).toBe(
+        '2026-02-01T00:00:00.000Z'
+      );
+    });
+
+    it('daily: returns computed deadline when endDate is far in the future', () => {
+      const now = new Date('2026-02-09T23:00:00Z');
+      // Next 4AM Sofia = 2026-02-10T02:00:00Z; endDate is 2027 → use the computed one.
+      expect(computeDeadline('daily', now, '2027-12-31T00:00:00Z')).toBe(
+        '2026-02-10T02:00:00.000Z'
+      );
     });
   });
 });
