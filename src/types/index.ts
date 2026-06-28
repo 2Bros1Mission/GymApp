@@ -33,6 +33,14 @@ export interface Workout {
   imageUrl?: string;
 }
 
+export type WorkoutCategory =
+  | 'strength'
+  | 'cardio'
+  | 'flexibility'
+  | 'hiit'
+  | 'sports'
+  | 'other';
+
 export interface WorkoutLog {
   id: string;
   workoutId: string;
@@ -42,6 +50,7 @@ export interface WorkoutLog {
   exercises: WorkoutExercise[];
   notes?: string;
   completed: boolean;
+  category?: WorkoutCategory | null;
 }
 
 export interface UserProfile {
