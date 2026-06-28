@@ -274,3 +274,69 @@ describe('getUserRank — on-board', () => {
     expect(mockQueries).toHaveLength(0);
   });
 });
+
+describe('getUserRank — off-board', () => {
+  it('falls back to profiles.leaderboard_points when user is not in the snapshot', async () => {
+    // Q1: own snapshot row — empty
+    mockQueue.push({ data: null, error: null });
+    // Q2: profiles fallback
+    mockQueue.push({
+      data: { leaderboard_points: 42 },
+      error: null,
+    });
+    const out = await getUserRank('u-new');
+    expect(out).toEqual({
+      rank: null,
+      points: 42,
+      totalParticipants: 0,
+      neighbors: [],
+    });
+    expect(mockQueries[1]).toMatchObject({
+      table: 'profiles',
+      select: 'leaderboard_points',
+      filters: [{ method: 'eq', args: ['id', 'u-new'] }],
+    });
+  });
+
+  it('returns 0 points when user has no profile row either', async () => {
+    mockQueue.push({ data: null, error: null }); // no snapshot
+    mockQueue.push({ data: null, error: null }); // no profile
+    await expect(getUserRank('u-ghost')).resolves.toEqual({
+      rank: null,
+      points: 0,
+      totalParticipants: 0,
+      neighbors: [],
+    });
+  });
+
+  it('throws a generic message when the snapshot read errors', async () => {
+    mockQueue.push({ data: null, error: { message: 'boom', code: '08000' } });
+    await expect(getUserRank('u-x')).rejects.toThrow('Failed to load user rank');
+  });
+
+  it('throws a generic message when the count read errors', async () => {
+    mockQueue.push({
+      data: { rank: 1, user_id: 'u-x', user_name: 'X', points: 100, refreshed_at: 'T' },
+      error: null,
+    });
+    mockQueue.push({ data: null, error: { message: 'count failed', code: '08000' }, count: null });
+    mockQueue.push({ data: [], error: null });
+    await expect(getUserRank('u-x')).rejects.toThrow('Failed to load user rank');
+  });
+
+  it('throws a generic message when the neighbors read errors', async () => {
+    mockQueue.push({
+      data: { rank: 1, user_id: 'u-x', user_name: 'X', points: 100, refreshed_at: 'T' },
+      error: null,
+    });
+    mockQueue.push({ data: [], error: null, count: 5 });
+    mockQueue.push({ data: null, error: { message: 'rls', code: '42501' } });
+    await expect(getUserRank('u-x')).rejects.toThrow('Failed to load user rank');
+  });
+
+  it('throws a generic message when the profile fallback read errors', async () => {
+    mockQueue.push({ data: null, error: null });
+    mockQueue.push({ data: null, error: { message: 'fail', code: '08000' } });
+    await expect(getUserRank('u-x')).rejects.toThrow('Failed to load user rank');
+  });
+});

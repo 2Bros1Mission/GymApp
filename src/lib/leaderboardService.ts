@@ -143,6 +143,22 @@ export async function getUserRank(userId: string): Promise<UserRankInfo> {
     };
   }
 
-  // Off-board branch handled in Task 6.
-  return { rank: null, points: 0, totalParticipants: 0, neighbors: [] };
+  // Off-board: user has no snapshot row. Fall back to profiles.leaderboard_points.
+  const profile = await sb
+    .from('profiles')
+    .select('leaderboard_points')
+    .eq('id', userId)
+    .maybeSingle() as { data: { leaderboard_points: number } | null; error: unknown };
+
+  if (profile.error) {
+    console.error('[leaderboardService] getUserRank profile:', profile.error);
+    throw new Error('Failed to load user rank');
+  }
+
+  return {
+    rank: null,
+    points: profile.data?.leaderboard_points ?? 0,
+    totalParticipants: 0,
+    neighbors: [],
+  };
 }
