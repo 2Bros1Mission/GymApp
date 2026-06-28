@@ -1,4 +1,4 @@
-import { getLeaderboard } from '../leaderboardService';
+import { getLeaderboard, getLeaderboardLastUpdated } from '../leaderboardService';
 
 interface QueryRecord {
   table: string;
@@ -93,5 +93,35 @@ describe('getLeaderboard', () => {
     await expect(getLeaderboard()).rejects.toThrow('Failed to load leaderboard');
     expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[leaderboardService] getLeaderboard:');
     expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
+  });
+});
+
+describe('getLeaderboardLastUpdated', () => {
+  it('returns the refreshed_at ISO string when the snapshot has rows', async () => {
+    mockQueue.push({
+      data: { refreshed_at: '2026-06-28T10:00:00Z' },
+      error: null,
+    });
+    await expect(getLeaderboardLastUpdated()).resolves.toBe('2026-06-28T10:00:00Z');
+    expect(mockQueries[0]).toMatchObject({
+      table: 'leaderboard_snapshot',
+      select: 'refreshed_at',
+      filters: [
+        { method: 'order', args: ['refreshed_at', { ascending: false }] },
+        { method: 'limit', args: [1] },
+      ],
+    });
+  });
+
+  it('returns null when the snapshot is empty', async () => {
+    mockQueue.push({ data: null, error: null });
+    await expect(getLeaderboardLastUpdated()).resolves.toBeNull();
+  });
+
+  it('throws a generic message on PostgrestError', async () => {
+    const raw = { message: 'connection failure', code: '08000' };
+    mockQueue.push({ data: null, error: raw });
+    await expect(getLeaderboardLastUpdated()).rejects.toThrow('Failed to load leaderboard freshness');
+    expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[leaderboardService] getLeaderboardLastUpdated:');
   });
 });

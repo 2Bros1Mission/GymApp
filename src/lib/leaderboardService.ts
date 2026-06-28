@@ -39,3 +39,18 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
   }
   return (data ?? []).map((r: Record<string, unknown>) => mapRowToEntry(r));
 }
+
+export async function getLeaderboardLastUpdated(): Promise<string | null> {
+  const { data, error } = await sb
+    .from('leaderboard_snapshot')
+    .select('refreshed_at')
+    .order('refreshed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error('[leaderboardService] getLeaderboardLastUpdated:', error);
+    throw new Error('Failed to load leaderboard freshness');
+  }
+  if (!data) return null;
+  return (data as { refreshed_at: string }).refreshed_at;
+}
