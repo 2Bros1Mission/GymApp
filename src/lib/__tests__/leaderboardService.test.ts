@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  (console.error as jest.Mock).mockRestore?.();
+  (console.error as jest.Mock).mockRestore();
 });
 
 describe('getLeaderboard', () => {
