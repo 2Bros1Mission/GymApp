@@ -157,7 +157,7 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
     console.error('[leaderboardService] getLeaderboard:', error);
     throw new Error('Failed to load leaderboard');
   }
-  return (data ?? []).map((r) => mapRowToEntry(r as Record<string, unknown>));
+  return (data ?? []).map((r: Record<string, unknown>) => mapRowToEntry(r));
 }
 ```
 
@@ -249,7 +249,7 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
     console.error('[leaderboardService] getLeaderboard:', error);
     throw new Error('Failed to load leaderboard');
   }
-  return (data ?? []).map((r) => mapRowToEntry(r as Record<string, unknown>));
+  return (data ?? []).map((r: Record<string, unknown>) => mapRowToEntry(r));
 }
 ```
 
@@ -506,7 +506,7 @@ export async function getLeaderboardHistory(
     console.error('[leaderboardService] getLeaderboardHistory:', error);
     throw new Error('Failed to load leaderboard history');
   }
-  return (data ?? []).map((r) => mapRowToHistory(r as Record<string, unknown>));
+  return (data ?? []).map((r: Record<string, unknown>) => mapRowToHistory(r));
 }
 ```
 
@@ -735,7 +735,7 @@ export async function getUserRank(userId: string): Promise<UserRankInfo> {
     }
 
     const neighbors = (neighborsRes.data ?? [])
-      .map((r) => mapRowToEntry(r))
+      .map((r: Record<string, unknown>) => mapRowToEntry(r))
       .filter((n) => n.userId !== userId);
 
     return {
