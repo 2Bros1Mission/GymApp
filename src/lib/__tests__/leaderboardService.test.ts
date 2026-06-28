@@ -127,6 +127,7 @@ describe('getLeaderboardLastUpdated', () => {
     mockQueue.push({ data: null, error: raw });
     await expect(getLeaderboardLastUpdated()).rejects.toThrow('Failed to load leaderboard freshness');
     expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[leaderboardService] getLeaderboardLastUpdated:');
+    expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
   });
 });
 
@@ -183,5 +184,7 @@ describe('getLeaderboardHistory', () => {
     const raw = { message: 'policy "y" denied', code: '42501' };
     mockQueue.push({ data: null, error: raw });
     await expect(getLeaderboardHistory('user-1')).rejects.toThrow('Failed to load leaderboard history');
+    expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[leaderboardService] getLeaderboardHistory:');
+    expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
   });
 });
