@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { LeaderboardEntry } from '../types';
+import type { LeaderboardEntry, LeaderboardHistoryEntry } from '../types';
 
 // The generated Database type predates the leaderboard tables; until it's
 // regenerated, work through an untyped view for these reads. Row-level
@@ -19,6 +19,14 @@ function mapRowToEntry(row: Record<string, unknown>): LeaderboardEntry {
     userName: row.user_name as string,
     points: row.points as number,
     refreshedAt: row.refreshed_at as string,
+  };
+}
+
+function mapRowToHistory(row: Record<string, unknown>): LeaderboardHistoryEntry {
+  return {
+    month: row.month as string,
+    rank: row.final_rank as number,
+    points: row.final_points as number,
   };
 }
 
@@ -53,4 +61,27 @@ export async function getLeaderboardLastUpdated(): Promise<string | null> {
   }
   if (!data) return null;
   return (data as { refreshed_at: string }).refreshed_at;
+}
+
+export async function getLeaderboardHistory(
+  userId: string,
+  limit: number = 6,
+): Promise<LeaderboardHistoryEntry[]> {
+  if (typeof userId !== 'string' || userId.trim().length === 0) {
+    throw new Error('invalid_user_id');
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > 24) {
+    throw new Error('invalid_limit');
+  }
+  const { data, error } = await sb
+    .from('leaderboard_history')
+    .select('month, final_rank, final_points')
+    .eq('user_id', userId)
+    .order('month', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('[leaderboardService] getLeaderboardHistory:', error);
+    throw new Error('Failed to load leaderboard history');
+  }
+  return (data ?? []).map((r: Record<string, unknown>) => mapRowToHistory(r));
 }

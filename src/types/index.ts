@@ -346,6 +346,12 @@ export interface LeaderboardEntry {
   refreshedAt: string;
 }
 
+export interface LeaderboardHistoryEntry {
+  month: string; // 'YYYY-MM'
+  rank: number;
+  points: number;
+}
+
 export interface TrainerChallengeTemplate {
   id: string;
   trainerId: string;
