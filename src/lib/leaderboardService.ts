@@ -34,5 +34,5 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
     console.error('[leaderboardService] getLeaderboard:', error);
     throw new Error('Failed to load leaderboard');
   }
-  return (data ?? []).map((r) => mapRowToEntry(r as Record<string, unknown>));
+  return (data ?? []).map((r: Record<string, unknown>) => mapRowToEntry(r));
 }
