@@ -20,14 +20,19 @@ Implement the read-only service layer that powers the Leaderboard sub-view (#144
 
 ### Types
 
+`LeaderboardEntry` **already exists** in `src/types/index.ts:341` (shipped via #131). We reuse it and add two new sibling types in the same file (not in the service file) for consistency with the rest of the challenge types:
+
 ```typescript
+// already in src/types/index.ts — DO NOT redefine
 export interface LeaderboardEntry {
+  rank: number;
   userId: string;
   userName: string;
   points: number;
-  rank: number;
+  refreshedAt: string;
 }
 
+// to be added in src/types/index.ts next to LeaderboardEntry
 export interface UserRankInfo {
   rank: number | null;            // null = not in snapshot
   points: number;                 // from snapshot if present, else profiles.leaderboard_points
@@ -41,6 +46,8 @@ export interface LeaderboardHistoryEntry {
   points: number;
 }
 ```
+
+The service file imports all three from `../types`. The neighbor entries inherit `refreshedAt` from the snapshot row, so the field is populated naturally by `mapRowToEntry`.
 
 ### Functions
 
@@ -144,6 +151,7 @@ Target ~25–30 tests, all deterministic. No real DB, no fake timers (no date ma
 - `src/lib/__tests__/leaderboardService.test.ts` — coverage matrix above
 
 **Modified**
+- `src/types/index.ts` — add `UserRankInfo` and `LeaderboardHistoryEntry` next to existing `LeaderboardEntry`
 - `docs/superpowers/specs/2026-06-28-leaderboard-service-design.md` — this file (added)
 - (Follow-up, not in this PR) `Documentation/Gamification.md` §869 service catalog — note that the leaderboard service lives in `leaderboardService.ts` and that history is own-rows-only
 - (Follow-up, not in this PR) Issue #138 body — ratify own-rows-only history and the file-placement change
