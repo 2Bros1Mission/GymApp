@@ -25,6 +25,9 @@ function mapRowToEntry(row: Record<string, unknown>): LeaderboardEntry {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEntry[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+    throw new Error('invalid_limit');
+  }
   const { data, error } = await sb
     .from('leaderboard_snapshot')
     .select('rank, user_id, user_name, points, refreshed_at')

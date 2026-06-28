@@ -67,4 +67,31 @@ describe('getLeaderboard', () => {
       ],
     });
   });
+
+  it('returns an empty array when the snapshot is empty', async () => {
+    mockQueue.push({ data: [], error: null });
+    await expect(getLeaderboard()).resolves.toEqual([]);
+  });
+
+  it('passes a custom limit through to the query', async () => {
+    mockQueue.push({ data: [], error: null });
+    await getLeaderboard(50);
+    expect(mockQueries[0].filters).toContainEqual({ method: 'limit', args: [50] });
+  });
+
+  it.each([0, -1, 1001, 1.5, NaN, Infinity])(
+    'throws invalid_limit when limit is %p',
+    async (bad) => {
+      await expect(getLeaderboard(bad)).rejects.toThrow('invalid_limit');
+      expect(mockQueries).toHaveLength(0);
+    }
+  );
+
+  it('throws a generic message and logs the raw error on PostgrestError', async () => {
+    const raw = { message: 'policy "x" denied select on leaderboard_snapshot', code: '42501' };
+    mockQueue.push({ data: null, error: raw });
+    await expect(getLeaderboard()).rejects.toThrow('Failed to load leaderboard');
+    expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[leaderboardService] getLeaderboard:');
+    expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
+  });
 });
