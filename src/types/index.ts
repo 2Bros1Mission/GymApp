@@ -352,6 +352,13 @@ export interface LeaderboardHistoryEntry {
   points: number;
 }
 
+export interface UserRankInfo {
+  rank: number | null;            // null = not in snapshot
+  points: number;                 // from snapshot if present, else profiles.leaderboard_points
+  totalParticipants: number;      // count of snapshot rows; 0 if user off-board
+  neighbors: LeaderboardEntry[];  // up to 2 above + 2 below; [] if off-board
+}
+
 export interface TrainerChallengeTemplate {
   id: string;
   trainerId: string;

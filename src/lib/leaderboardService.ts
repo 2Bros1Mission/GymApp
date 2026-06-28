@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
-import type { LeaderboardEntry, LeaderboardHistoryEntry } from '../types';
+import type {
+  LeaderboardEntry,
+  LeaderboardHistoryEntry,
+  UserRankInfo,
+} from '../types';
 
 // The generated Database type predates the leaderboard tables; until it's
 // regenerated, work through an untyped view for these reads. Row-level
@@ -84,4 +88,61 @@ export async function getLeaderboardHistory(
     throw new Error('Failed to load leaderboard history');
   }
   return (data ?? []).map((r: Record<string, unknown>) => mapRowToHistory(r));
+}
+
+export async function getUserRank(userId: string): Promise<UserRankInfo> {
+  if (typeof userId !== 'string' || userId.trim().length === 0) {
+    throw new Error('invalid_user_id');
+  }
+
+  // 1. Own snapshot row.
+  const own = await sb
+    .from('leaderboard_snapshot')
+    .select('rank, user_id, user_name, points, refreshed_at')
+    .eq('user_id', userId)
+    .maybeSingle() as { data: Record<string, unknown> | null; error: unknown };
+
+  if (own.error) {
+    console.error('[leaderboardService] getUserRank own:', own.error);
+    throw new Error('Failed to load user rank');
+  }
+
+  if (own.data) {
+    const me = mapRowToEntry(own.data);
+    // 2. Total participants + 3. Neighbors, in parallel.
+    const [countRes, neighborsRes] = await Promise.all([
+      sb.from('leaderboard_snapshot').select('user_id', { count: 'exact', head: true }) as unknown as
+        Promise<{ count: number | null; error: unknown }>,
+      sb
+        .from('leaderboard_snapshot')
+        .select('rank, user_id, user_name, points, refreshed_at')
+        .gte('rank', Math.max(1, me.rank - 2))
+        .lte('rank', me.rank + 2)
+        .order('rank', { ascending: true }) as unknown as
+        Promise<{ data: Record<string, unknown>[] | null; error: unknown }>,
+    ]);
+
+    if (countRes.error) {
+      console.error('[leaderboardService] getUserRank count:', countRes.error);
+      throw new Error('Failed to load user rank');
+    }
+    if (neighborsRes.error) {
+      console.error('[leaderboardService] getUserRank neighbors:', neighborsRes.error);
+      throw new Error('Failed to load user rank');
+    }
+
+    const neighbors = (neighborsRes.data ?? [])
+      .map((r: Record<string, unknown>) => mapRowToEntry(r))
+      .filter((n) => n.userId !== userId);
+
+    return {
+      rank: me.rank,
+      points: me.points,
+      totalParticipants: countRes.count ?? 0,
+      neighbors,
+    };
+  }
+
+  // Off-board branch handled in Task 6.
+  return { rank: null, points: 0, totalParticipants: 0, neighbors: [] };
 }

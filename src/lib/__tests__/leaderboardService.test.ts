@@ -2,6 +2,7 @@ import {
   getLeaderboard,
   getLeaderboardLastUpdated,
   getLeaderboardHistory,
+  getUserRank,
 } from '../leaderboardService';
 
 interface QueryRecord {
@@ -10,14 +11,18 @@ interface QueryRecord {
   filters: { method: string; args: unknown[] }[];
 }
 
-const mockQueue: { data: unknown; error: unknown }[] = [];
+const mockQueue: { data: unknown; error: unknown; count?: number | null }[] = [];
 const mockQueries: QueryRecord[] = [];
 
 function mockMakeChain(table: string): unknown {
   const record: QueryRecord = { table, filters: [] };
   mockQueries.push(record);
   const chain: Record<string, unknown> = {};
-  chain.select = (sel: string) => { record.select = sel; return chain; };
+  chain.select = (sel: string, opts?: Record<string, unknown>) => {
+    record.select = sel;
+    if (opts) record.filters.push({ method: 'select_opts', args: [opts] });
+    return chain;
+  };
   chain.eq = (...args: unknown[]) => { record.filters.push({ method: 'eq', args }); return chain; };
   chain.gte = (...args: unknown[]) => { record.filters.push({ method: 'gte', args }); return chain; };
   chain.lte = (...args: unknown[]) => { record.filters.push({ method: 'lte', args }); return chain; };
@@ -186,5 +191,86 @@ describe('getLeaderboardHistory', () => {
     await expect(getLeaderboardHistory('user-1')).rejects.toThrow('Failed to load leaderboard history');
     expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[leaderboardService] getLeaderboardHistory:');
     expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
+  });
+});
+
+describe('getUserRank — on-board', () => {
+  it('returns rank, points, totalParticipants, and four neighbors for a mid-rank user', async () => {
+    // Query 1: own snapshot row
+    mockQueue.push({
+      data: { rank: 5, user_id: 'u-me', user_name: 'Me', points: 350, refreshed_at: 'T' },
+      error: null,
+    });
+    // Query 2: total count (head request via select with count option — see impl)
+    mockQueue.push({ data: [], error: null, count: 273 });
+    // Query 3: neighbors
+    mockQueue.push({
+      data: [
+        { rank: 3, user_id: 'u-3', user_name: 'C', points: 380, refreshed_at: 'T' },
+        { rank: 4, user_id: 'u-4', user_name: 'D', points: 360, refreshed_at: 'T' },
+        { rank: 6, user_id: 'u-6', user_name: 'F', points: 340, refreshed_at: 'T' },
+        { rank: 7, user_id: 'u-7', user_name: 'G', points: 330, refreshed_at: 'T' },
+      ],
+      error: null,
+    });
+
+    const out = await getUserRank('u-me');
+
+    expect(out).toEqual({
+      rank: 5,
+      points: 350,
+      totalParticipants: 273,
+      neighbors: [
+        { rank: 3, userId: 'u-3', userName: 'C', points: 380, refreshedAt: 'T' },
+        { rank: 4, userId: 'u-4', userName: 'D', points: 360, refreshedAt: 'T' },
+        { rank: 6, userId: 'u-6', userName: 'F', points: 340, refreshedAt: 'T' },
+        { rank: 7, userId: 'u-7', userName: 'G', points: 330, refreshedAt: 'T' },
+      ],
+    });
+    // Self filter on own-row lookup
+    expect(mockQueries[0].filters).toContainEqual({ method: 'eq', args: ['user_id', 'u-me'] });
+  });
+
+  it('returns only "below" neighbors when user is rank 1', async () => {
+    mockQueue.push({
+      data: { rank: 1, user_id: 'u-1', user_name: 'A', points: 500, refreshed_at: 'T' },
+      error: null,
+    });
+    mockQueue.push({ data: [], error: null, count: 10 });
+    mockQueue.push({
+      data: [
+        { rank: 2, user_id: 'u-2', user_name: 'B', points: 480, refreshed_at: 'T' },
+        { rank: 3, user_id: 'u-3', user_name: 'C', points: 460, refreshed_at: 'T' },
+      ],
+      error: null,
+    });
+    const out = await getUserRank('u-1');
+    expect(out.rank).toBe(1);
+    expect(out.neighbors).toHaveLength(2);
+    expect(out.neighbors.every((n) => n.rank > 1)).toBe(true);
+  });
+
+  it('returns only "above" neighbors when user is the last rank', async () => {
+    mockQueue.push({
+      data: { rank: 10, user_id: 'u-10', user_name: 'J', points: 100, refreshed_at: 'T' },
+      error: null,
+    });
+    mockQueue.push({ data: [], error: null, count: 10 });
+    mockQueue.push({
+      data: [
+        { rank: 8, user_id: 'u-8', user_name: 'H', points: 120, refreshed_at: 'T' },
+        { rank: 9, user_id: 'u-9', user_name: 'I', points: 110, refreshed_at: 'T' },
+      ],
+      error: null,
+    });
+    const out = await getUserRank('u-10');
+    expect(out.rank).toBe(10);
+    expect(out.neighbors).toHaveLength(2);
+    expect(out.neighbors.every((n) => n.rank < 10)).toBe(true);
+  });
+
+  it.each(['', '   '])('throws invalid_user_id when userId is %p', async (bad) => {
+    await expect(getUserRank(bad)).rejects.toThrow('invalid_user_id');
+    expect(mockQueries).toHaveLength(0);
   });
 });
