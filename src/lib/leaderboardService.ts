@@ -7,158 +7,181 @@ import type {
 
 // The generated Database type predates the leaderboard tables; until it's
 // regenerated, work through an untyped view for these reads. Row-level
-// shapes are validated at the mapper boundary (mapRowToEntry).
+// shapes are validated at the mapper boundary (assertString / assertNumber).
+//
+// TODO(#137-followup): once `supabase gen types typescript` is rerun against
+// migrations 20260601..20260629 the launder + per-call casts here can go.
 type SupabaseClient = typeof supabase;
 type SupabaseFrom = SupabaseClient['from'];
+type SupabaseRpc = SupabaseClient['rpc'];
 const sb = supabase as unknown as {
   from: (table: string) => ReturnType<SupabaseFrom>;
+  rpc: (fn: string, params?: Record<string, unknown>) => ReturnType<SupabaseRpc>;
 };
+
+// ─── Limits ──────────────────────────────────────────────────────────────────
+
+// refresh_leaderboard_snapshot() caps the snapshot at top 100 rows
+// (20260606120000_challenges_scheduled_fns.sql:317). Allowing limit > 100
+// from the client silently truncates without telling the caller, so the
+// validator is aligned with the actual data ceiling.
+const LEADERBOARD_MAX_LIMIT = 100;
+
+// History retention is 12 months (Issue #134); UI never needs more than that.
+const HISTORY_MAX_LIMIT = 24;
+
+const SNAPSHOT_COLUMNS = 'rank, user_id, user_name, points, refreshed_at';
+
+// ─── Runtime validators ──────────────────────────────────────────────────────
+
+function asNumber(row: Record<string, unknown>, key: string): number {
+  const v = row[key];
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    throw new Error(`malformed_row:${key}`);
+  }
+  return v;
+}
+
+function asString(row: Record<string, unknown>, key: string): string {
+  const v = row[key];
+  if (typeof v !== 'string') {
+    throw new Error(`malformed_row:${key}`);
+  }
+  return v;
+}
+
+function assertNonEmptyUserId(userId: unknown): string {
+  if (typeof userId !== 'string') throw new Error('invalid_user_id');
+  const trimmed = userId.trim();
+  if (trimmed.length === 0) throw new Error('invalid_user_id');
+  return trimmed;
+}
+
+function assertLimit(limit: number, max: number): void {
+  if (!Number.isInteger(limit) || limit < 1 || limit > max) {
+    throw new Error('invalid_limit');
+  }
+}
+
+// ─── Error helper ────────────────────────────────────────────────────────────
+//
+// Every read path follows the same shape: log the raw PostgrestError under a
+// stable prefix (so a debugger can find the failing leg) and throw a generic
+// user-facing message (so policy / constraint names never reach the UI).
+
+function expectOk(label: string, err: unknown, userMessage: string): void {
+  if (!err) return;
+  console.error(`[leaderboardService] ${label}:`, err);
+  throw new Error(userMessage);
+}
 
 // ─── Row → domain mappers ────────────────────────────────────────────────────
 
 function mapRowToEntry(row: Record<string, unknown>): LeaderboardEntry {
   return {
-    rank: row.rank as number,
-    userId: row.user_id as string,
-    userName: row.user_name as string,
-    points: row.points as number,
-    refreshedAt: row.refreshed_at as string,
+    rank: asNumber(row, 'rank'),
+    userId: asString(row, 'user_id'),
+    userName: asString(row, 'user_name'),
+    points: asNumber(row, 'points'),
+    refreshedAt: asString(row, 'refreshed_at'),
   };
 }
 
 function mapRowToHistory(row: Record<string, unknown>): LeaderboardHistoryEntry {
+  // leaderboard_history.month is a Postgres `date` with CHECK day = 1, so
+  // PostgREST serializes it as 'YYYY-MM-01'. The public contract is
+  // 'YYYY-MM' (LeaderboardHistoryEntry.month), so slice off the day part
+  // here at the boundary instead of leaking the 10-char form to consumers.
+  const raw = asString(row, 'month');
   return {
-    month: row.month as string,
-    rank: row.final_rank as number,
-    points: row.final_points as number,
+    month: raw.slice(0, 7),
+    rank: asNumber(row, 'final_rank'),
+    points: asNumber(row, 'final_points'),
   };
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEntry[]> {
-  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-    throw new Error('invalid_limit');
-  }
+export async function getLeaderboard(
+  limit: number = LEADERBOARD_MAX_LIMIT,
+): Promise<LeaderboardEntry[]> {
+  assertLimit(limit, LEADERBOARD_MAX_LIMIT);
   const { data, error } = await sb
     .from('leaderboard_snapshot')
-    .select('rank, user_id, user_name, points, refreshed_at')
+    .select(SNAPSHOT_COLUMNS)
     .order('rank', { ascending: true })
     .limit(limit);
-  if (error) {
-    console.error('[leaderboardService] getLeaderboard:', error);
-    throw new Error('Failed to load leaderboard');
-  }
+  expectOk('getLeaderboard', error, 'Failed to load leaderboard');
   return (data ?? []).map((r: Record<string, unknown>) => mapRowToEntry(r));
 }
 
-export async function getLeaderboardLastUpdated(): Promise<string | null> {
-  const { data, error } = await sb
-    .from('leaderboard_snapshot')
-    .select('refreshed_at')
-    .order('refreshed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    console.error('[leaderboardService] getLeaderboardLastUpdated:', error);
-    throw new Error('Failed to load leaderboard freshness');
-  }
-  if (!data) return null;
-  return (data as { refreshed_at: string }).refreshed_at;
-}
+// NOTE: getLeaderboardLastUpdated() was removed in the #137 follow-up.
+// refresh_leaderboard_snapshot() does TRUNCATE+INSERT in a single transaction
+// with now(), so every row carries the same refreshed_at. Callers can read
+// the freshness off any entry from getLeaderboard()[0]?.refreshedAt — a
+// dedicated freshness query is redundant.
 
 export async function getLeaderboardHistory(
   userId: string,
   limit: number = 6,
 ): Promise<LeaderboardHistoryEntry[]> {
-  if (typeof userId !== 'string' || userId.trim().length === 0) {
-    throw new Error('invalid_user_id');
-  }
-  if (!Number.isInteger(limit) || limit < 1 || limit > 24) {
-    throw new Error('invalid_limit');
-  }
+  const safeUserId = assertNonEmptyUserId(userId);
+  assertLimit(limit, HISTORY_MAX_LIMIT);
   const { data, error } = await sb
     .from('leaderboard_history')
     .select('month, final_rank, final_points')
-    .eq('user_id', userId)
+    .eq('user_id', safeUserId)
     .order('month', { ascending: false })
     .limit(limit);
-  if (error) {
-    console.error('[leaderboardService] getLeaderboardHistory:', error);
-    throw new Error('Failed to load leaderboard history');
-  }
+  expectOk('getLeaderboardHistory', error, 'Failed to load leaderboard history');
   return (data ?? []).map((r: Record<string, unknown>) => mapRowToHistory(r));
 }
 
+// RPC return shape — single source of truth for fn_get_user_rank_info's
+// payload. Kept local; mirrors the jsonb_build_object in the SQL function.
+interface RankInfoPayload {
+  rank: number | null;
+  points: number;
+  total_participants: number;
+  neighbors: Record<string, unknown>[];
+  refreshed_at: string | null;
+  profile_missing?: boolean;
+}
+
 export async function getUserRank(userId: string): Promise<UserRankInfo> {
-  if (typeof userId !== 'string' || userId.trim().length === 0) {
-    throw new Error('invalid_user_id');
-  }
+  const safeUserId = assertNonEmptyUserId(userId);
 
-  // 1. Own snapshot row.
-  const own = await sb
-    .from('leaderboard_snapshot')
-    .select('rank, user_id, user_name, points, refreshed_at')
-    .eq('user_id', userId)
-    .maybeSingle() as { data: Record<string, unknown> | null; error: unknown };
+  // Single RPC: own-row + total + neighbors all computed against ONE
+  // snapshot version inside one transaction, closing the read-skew race
+  // that a 2-statement client composition had across the 30-min
+  // refresh_leaderboard_snapshot() boundary. Off-board rank is also
+  // computed server-side via COUNT(*) over profiles, per
+  // Documentation/Gamification.md §372/§383 — UI no longer needs to
+  // special-case `rank: null` for users outside the top 100.
+  const { data, error } = (await sb.rpc('fn_get_user_rank_info', {
+    p_user_id: safeUserId,
+  })) as unknown as { data: RankInfoPayload | null; error: unknown };
 
-  if (own.error) {
-    console.error('[leaderboardService] getUserRank own:', own.error);
+  expectOk('getUserRank', error, 'Failed to load user rank');
+
+  if (!data) {
+    // Defensive: SECURITY DEFINER function with a non-null path always
+    // returns a row. Reaching here means the rpc layer dropped it.
     throw new Error('Failed to load user rank');
   }
 
-  if (own.data) {
-    const me = mapRowToEntry(own.data);
-    // 2. Total participants + 3. Neighbors, in parallel.
-    const [countRes, neighborsRes] = await Promise.all([
-      sb.from('leaderboard_snapshot').select('user_id', { count: 'exact', head: true }) as unknown as
-        Promise<{ count: number | null; error: unknown }>,
-      sb
-        .from('leaderboard_snapshot')
-        .select('rank, user_id, user_name, points, refreshed_at')
-        .gte('rank', Math.max(1, me.rank - 2))
-        .lte('rank', me.rank + 2)
-        .order('rank', { ascending: true }) as unknown as
-        Promise<{ data: Record<string, unknown>[] | null; error: unknown }>,
-    ]);
-
-    if (countRes.error) {
-      console.error('[leaderboardService] getUserRank count:', countRes.error);
-      throw new Error('Failed to load user rank');
-    }
-    if (neighborsRes.error) {
-      console.error('[leaderboardService] getUserRank neighbors:', neighborsRes.error);
-      throw new Error('Failed to load user rank');
-    }
-
-    const neighbors = (neighborsRes.data ?? [])
-      .map((r: Record<string, unknown>) => mapRowToEntry(r))
-      .filter((n) => n.userId !== userId);
-
-    return {
-      rank: me.rank,
-      points: me.points,
-      totalParticipants: countRes.count ?? 0,
-      neighbors,
-    };
-  }
-
-  // Off-board: user has no snapshot row. Fall back to profiles.leaderboard_points.
-  const profile = await sb
-    .from('profiles')
-    .select('leaderboard_points')
-    .eq('id', userId)
-    .maybeSingle() as { data: { leaderboard_points: number } | null; error: unknown };
-
-  if (profile.error) {
-    console.error('[leaderboardService] getUserRank profile:', profile.error);
-    throw new Error('Failed to load user rank');
+  if (data.profile_missing) {
+    // handle_new_user trigger invariant: every auth user has a profile.
+    // Reaching this branch means the invariant was violated (manual
+    // delete bypassing CASCADE, trigger disabled). Surface it as a
+    // warning so on-call notices, but don't crash the leaderboard UI.
+    console.warn('[leaderboardService] getUserRank: profile row missing for', safeUserId);
   }
 
   return {
-    rank: null,
-    points: profile.data?.leaderboard_points ?? 0,
-    totalParticipants: 0,
-    neighbors: [],
+    rank: data.rank,
+    points: data.points,
+    totalParticipants: data.total_participants,
+    neighbors: (data.neighbors ?? []).map((n) => mapRowToEntry(n)),
   };
 }

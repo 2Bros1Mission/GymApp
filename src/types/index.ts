@@ -347,16 +347,28 @@ export interface LeaderboardEntry {
 }
 
 export interface LeaderboardHistoryEntry {
-  month: string; // 'YYYY-MM'
+  month: string; // 'YYYY-MM' (sliced from the Postgres `date` column at the mapper)
   rank: number;
   points: number;
 }
 
 export interface UserRankInfo {
-  rank: number | null;            // null = not in snapshot
-  points: number;                 // from snapshot if present, else profiles.leaderboard_points
-  totalParticipants: number;      // count of snapshot rows; 0 if user off-board
-  neighbors: LeaderboardEntry[];  // up to 2 above + 2 below; [] if off-board
+  // Server-computed rank — on-board: snapshot rank; off-board with non-zero
+  // points: live COUNT over profiles per Gamification.md §383; null only
+  // when the profile row is missing (handle_new_user trigger invariant
+  // violated).
+  rank: number | null;
+  // From snapshot if present, else profiles.leaderboard_points.
+  points: number;
+  // Count of profiles with leaderboard_points > 0 (matches the filter
+  // refresh_leaderboard_snapshot uses to build the snapshot). NOT the
+  // snapshot row count — the snapshot is capped at top 100, but the real
+  // participant pool can be arbitrarily larger.
+  totalParticipants: number;
+  // Up to 2 above + 2 below the caller. Empty when off-board (snapshot
+  // only stores the top 100, so off-board users have no comparable
+  // neighbours in the cached set).
+  neighbors: LeaderboardEntry[];
 }
 
 export interface TrainerChallengeTemplate {
