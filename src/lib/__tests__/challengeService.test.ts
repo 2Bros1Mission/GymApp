@@ -593,6 +593,55 @@ describe('getActiveChallenges', () => {
     expect(result[0].streakComebackDiff).toBe(0);
   });
 
+  it('returns null streakComebackDiff for never-streaked users (longestStreak=0)', async () => {
+    // F2 regression: a brand-new streak participant has longestStreak=0
+    // and currentProgress=0 → diff=0. Without the longestStreak>0 gate,
+    // comebackDiff would be 0 and the UI would render "matched your
+    // record!" on day zero of someone's first streak attempt. Null is
+    // the right "not applicable, you have no record to match yet" signal.
+    mockQueue.push({
+      data: [
+        {
+          id: 'p-fresh',
+          challenge_id: 'c1',
+          user_id: 'user-1',
+          current_progress: 0,
+          longest_streak: 0,
+          target_value: 10,
+          status: 'active',
+          joined_at: '2026-01-01T00:00:00Z',
+          completed_at: null,
+          source: 'discovery',
+          created_at: '2026-01-01T00:00:00Z',
+          challenge: {
+            id: 'c1',
+            template_id: 't1',
+            creator_id: null,
+            source: 'platform',
+            title: 'Streak',
+            title_bg: null,
+            description: null,
+            description_bg: null,
+            challenge_type: 'streak',
+            cadence: 'daily',
+            difficulty: 'easy',
+            target_value: 10,
+            points: 50,
+            category: null,
+            status: 'active',
+            start_date: '2026-01-01',
+            end_date: null,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        },
+      ],
+      error: null,
+    });
+    const result = await getActiveChallenges('user-1');
+    expect(result[0].isStreakBroken).toBe(false);
+    expect(result[0].streakComebackDiff).toBeNull();
+  });
+
   it('filters out orphan participants whose joined challenge row is null', async () => {
     // Defense against RLS hiding the parent challenge row while the
     // participant row remains visible (or any FK-cascade edge case).
@@ -741,7 +790,8 @@ describe('getActiveChallenges', () => {
             category: null,
             status: 'active',
             start_date: '2026-01-01',
-            end_date: '2026-12-31T00:00:00Z',
+            // Postgres `date` column → PostgREST returns "YYYY-MM-DD".
+            end_date: '2026-12-31',
             created_at: '2026-01-01T00:00:00Z',
           },
         },
@@ -749,7 +799,10 @@ describe('getActiveChallenges', () => {
       error: null,
     });
     const result = await getActiveChallenges('user-1');
-    expect(result[0].timeRemaining).toBe('2026-12-31T00:00:00Z');
+    // end_date='2026-12-31' means the challenge is playable through that
+    // calendar day; under the 4AM Sofia convention, the hard expiry is
+    // 2027-01-01 04:00 Sofia = 2027-01-01 02:00Z (winter EET, UTC+2).
+    expect(result[0].timeRemaining).toBe('2027-01-01T02:00:00.000Z');
   });
 
   it('computes daily timeRemaining across the spring DST boundary using the target offset', async () => {
@@ -1064,10 +1117,25 @@ describe('computeDeadline (4AM Sofia boundary)', () => {
   });
 
   describe('one_time', () => {
-    it('returns endDate as-is', () => {
-      expect(computeDeadline('one_time', new Date('2026-01-01T00:00:00Z'), '2026-12-31T00:00:00Z')).toBe(
-        '2026-12-31T00:00:00Z'
-      );
+    it('returns 4AM Sofia next-day for a calendar-day end_date (DB "YYYY-MM-DD")', () => {
+      // Postgres `date` column → PostgREST returns "2026-12-31". Hard
+      // expiry under the 4AM Sofia convention is the next morning at
+      // 04:00 Sofia → 2027-01-01 02:00Z (winter EET, UTC+2).
+      expect(
+        computeDeadline('one_time', new Date('2026-01-01T00:00:00Z'), '2026-12-31')
+      ).toBe('2027-01-01T02:00:00.000Z');
+    });
+
+    it('passes a full ISO timestamp through as the exact instant', () => {
+      // Callers that already know the exact UTC instant (not from a `date`
+      // column) get that instant back without further offset math.
+      expect(
+        computeDeadline(
+          'one_time',
+          new Date('2026-01-01T00:00:00Z'),
+          '2026-12-31T15:30:00Z'
+        )
+      ).toBe('2026-12-31T15:30:00.000Z');
     });
 
     it('returns null when endDate is null', () => {
@@ -1106,6 +1174,32 @@ describe('computeDeadline (4AM Sofia boundary)', () => {
       // Next 4AM Sofia = 2026-02-10T02:00:00Z; endDate is 2027 → use the computed one.
       expect(computeDeadline('daily', now, '2027-12-31T00:00:00Z')).toBe(
         '2026-02-10T02:00:00.000Z'
+      );
+    });
+
+    // F1 regression: end_date is a Postgres `date` column (YYYY-MM-DD).
+    // Naive new Date('2026-01-15') is UTC midnight = 02:00-03:00 Sofia,
+    // which would tell the user the challenge expired BEFORE the start
+    // of its actual last day in their timezone. The fix anchors the
+    // expiry to the 4AM-Sofia day-boundary convention: a challenge
+    // ending 2026-01-15 is playable through 2026-01-16T04:00 Sofia.
+    it('daily: calendar-day end_date is treated as end-of-day Sofia (4AM next morning)', () => {
+      // 2026-01-15 09:00 Sofia EET (UTC+2) = 2026-01-15 07:00 UTC.
+      // User opens the app on the morning of the LAST playable day.
+      const now = new Date('2026-01-15T07:00:00Z');
+      // Without the fix: clamp returns 2026-01-15T00:00:00.000Z (7 hours
+      // in the past on the user's clock). With the fix: 2026-01-16
+      // 04:00 Sofia EET = 2026-01-16 02:00 UTC.
+      expect(computeDeadline('daily', now, '2026-01-15')).toBe(
+        '2026-01-16T02:00:00.000Z'
+      );
+    });
+
+    it('daily: calendar-day end_date deep in the past clamps to that day, not midnight', () => {
+      const now = new Date('2026-02-10T08:00:00Z');
+      // end_date '2026-01-15' (calendar day) → hard expiry 2026-01-16T02:00:00Z.
+      expect(computeDeadline('daily', now, '2026-01-15')).toBe(
+        '2026-01-16T02:00:00.000Z'
       );
     });
   });

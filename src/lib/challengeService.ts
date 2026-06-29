@@ -277,24 +277,33 @@ export interface PickChallengeResult {
 // in winter and UTC+3 (EEST) in summer. We rely on Intl.DateTimeFormat
 // for the offset rather than hardcoding DST rules.
 
-// Hoisted to module scope: constructing Intl.DateTimeFormat is heavy (pulls
-// in tz data and compiles a formatter), and the options never vary. Calling
-// sofiaOffsetMinutes once per active challenge meant N allocations per
-// render — now exactly one allocation for the whole module lifetime.
-const SOFIA_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Europe/Sofia',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-});
+// Lazy singleton: constructing Intl.DateTimeFormat is heavy (pulls in tz
+// data and compiles a formatter), and the options never vary. Building it
+// per call to sofiaOffsetMinutes meant N allocations per render. We
+// initialize on first use rather than at module import so that any future
+// runtime without 'Europe/Sofia' tz data degrades the My-Challenges screen
+// instead of breaking the import for every screen that transitively pulls
+// this module.
+let sofiaFormatter: Intl.DateTimeFormat | null = null;
+function getSofiaFormatter(): Intl.DateTimeFormat {
+  if (sofiaFormatter === null) {
+    sofiaFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Sofia',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+  return sofiaFormatter;
+}
 
 function sofiaOffsetMinutes(at: Date): number {
   // Asia approach: format the moment in Sofia and compute UTC delta.
-  const sofiaParts = SOFIA_FORMATTER.formatToParts(at);
+  const sofiaParts = getSofiaFormatter().formatToParts(at);
   const m: Record<string, string> = {};
   for (const p of sofiaParts) if (p.type !== 'literal') m[p.type] = p.value;
   // Reconstruct as if Sofia local time were UTC, then diff against the real UTC.
@@ -320,12 +329,44 @@ export function _computeDeadlineForTest(
   return computeDeadline(cadence, now, endDate);
 }
 
+// Maps a calendar-day end_date ("YYYY-MM-DD") or a full ISO timestamp to
+// the hard expiry instant in true UTC. Calendar-day input: treat as the
+// LAST playable day under the 4AM Sofia convention → the expiry is the
+// next morning at 04:00 Sofia. ISO timestamp input: pass through unchanged
+// (it's already a precise instant).
+function endOfDaySofia(endDate: string): Date | null {
+  // Postgres `date` columns serialize as "YYYY-MM-DD". Anything else (full
+  // ISO with 'T') we leave alone — the caller already knows the exact
+  // instant they want.
+  if (!endDate.includes('T')) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(endDate);
+    if (!match) return null;
+    const [, y, mo, d] = match;
+    // Construct next-day 04:00 as if it were UTC, then shift to true UTC
+    // using the Sofia offset at that instant (handles DST symmetrically
+    // with the main computeDeadline logic).
+    const nextDayUtcWall = new Date(
+      Date.UTC(Number(y), Number(mo) - 1, Number(d) + 1, 4, 0, 0)
+    );
+    const offset = sofiaOffsetMinutes(nextDayUtcWall);
+    return new Date(nextDayUtcWall.getTime() - offset * 60000);
+  }
+  const parsed = new Date(endDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function computeDeadline(
   cadence: 'daily' | 'weekly' | 'monthly' | 'one_time',
   now: Date,
   endDate: string | null
 ): string | null {
-  if (cadence === 'one_time') return endDate;
+  if (cadence === 'one_time') {
+    // one_time: the challenge's hard expiry IS the end date (under the
+    // 4AM Sofia day-boundary convention if end_date is calendar-day).
+    if (!endDate) return null;
+    const expiry = endOfDaySofia(endDate);
+    return expiry ? expiry.toISOString() : null;
+  }
 
   const offsetMin = sofiaOffsetMinutes(now);
   // Convert "now" into a virtual Sofia-local instant by shifting the UTC clock.
@@ -361,10 +402,19 @@ function computeDeadline(
   // date has passed must not advertise a future "next 4AM" deadline. The
   // participant row can outlive the challenge (no auto-expire trigger), so
   // computeDeadline is the last line of defense for the UI.
+  //
+  // `challenges.end_date` is a Postgres `date` (calendar day, no time) —
+  // PostgREST returns it as "YYYY-MM-DD". The 4AM-Sofia day-boundary
+  // convention says a calendar day runs from 04:00 Sofia to 04:00 Sofia
+  // next morning, so a challenge with end_date='2026-01-15' is genuinely
+  // playable through 2026-01-16T04:00 Sofia. Naive `new Date("2026-01-15")`
+  // parses as UTC midnight — 02:00-03:00 Sofia depending on DST — which
+  // would show the challenge as already expired on the morning of its
+  // actual last day. Compute the true hard expiry instead.
   if (endDate) {
-    const end = new Date(endDate);
-    if (end.getTime() < targetUtc.getTime()) {
-      return end.toISOString();
+    const expiry = endOfDaySofia(endDate);
+    if (expiry !== null && expiry.getTime() < targetUtc.getTime()) {
+      return expiry.toISOString();
     }
   }
   return targetUtc.toISOString();
@@ -586,11 +636,15 @@ export async function getActiveChallenges(
       //   - isStreakBroken: strict "you are behind your previous best".
       //   - streakComebackDiff: how far behind, in days.
       //     - positive N: behind by N days
-      //     - 0: matched your record (UI can render a "matched!" badge)
-      //     - null: not applicable — either non-streak, or strictly beating
-      //       the previous best (negative diff is meaningless to surface).
+      //     - 0: matched your previous best (UI: "matched your record!")
+      //     - null: not applicable — either non-streak, the user has
+      //       never built a streak yet (longestStreak === 0; surfacing
+      //       "matched your record!" on day zero is misleading), or
+      //       they're strictly beating their best (negative diff is
+      //       meaningless to render).
       const diff = participant.longestStreak - participant.currentProgress;
-      const comebackDiff = isStreak && diff >= 0 ? diff : null;
+      const comebackDiff =
+        isStreak && participant.longestStreak > 0 && diff >= 0 ? diff : null;
       return {
         participant,
         challenge,
