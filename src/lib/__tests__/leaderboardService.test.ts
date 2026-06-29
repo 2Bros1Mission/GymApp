@@ -319,6 +319,31 @@ describe('getUserRank — off-board (RPC)', () => {
     });
   });
 
+  it('returns rank: null for a zero-points user (no relative rank in the >0-point cohort)', async () => {
+    // Regression for N2: previously the SQL count predicate matched
+    // every >0-point user against a 0-point caller, returning
+    // rank = total_participants + 1 ("rank 5001 of 5000"). RPC now
+    // short-circuits zero-points to rank: null so the UI can render
+    // "unranked" copy.
+    mockRpcQueue.push({
+      data: {
+        rank: null,
+        points: 0,
+        total_participants: 5000,
+        neighbors: [],
+        refreshed_at: null,
+      },
+      error: null,
+    });
+    const out = await getUserRank('u-fresh');
+    expect(out).toEqual({
+      rank: null,
+      points: 0,
+      totalParticipants: 5000,
+      neighbors: [],
+    });
+  });
+
   it('returns rank: null with a warning when the profile row is missing', async () => {
     mockRpcQueue.push({
       data: {
@@ -380,5 +405,68 @@ describe('Row validation at the mapper boundary', () => {
       error: null,
     });
     await expect(getLeaderboardHistory('u-1')).rejects.toThrow('malformed_row:final_rank');
+  });
+
+  it('throws malformed_row:month when the date column shape is unexpected', async () => {
+    // Regression for N7: previously mapRowToHistory blindly sliced
+    // raw.slice(0, 7). If PostgREST ever returns 'YYYY-M-D' or a
+    // timezone-converted timestamp, the slice produces garbage. The
+    // regex guard converts that to a clean malformed_row.
+    mockQueue.push({
+      data: [{ month: '26-05-01', final_rank: 7, final_points: 320 }],
+      error: null,
+    });
+    await expect(getLeaderboardHistory('u-1')).rejects.toThrow('malformed_row:month');
+  });
+
+  it('throws malformed_row:total_participants when the RPC payload is missing a field', async () => {
+    // Regression for N3: the RPC payload was previously type-asserted
+    // (`as unknown as RankInfoPayload`) with no runtime validation,
+    // so a malformed jsonb (missing total_participants) would let
+    // `undefined as number` poison the consumer. validateRankPayload
+    // now enforces the same boundary discipline as the row mappers.
+    mockRpcQueue.push({
+      data: {
+        rank: 5,
+        points: 350,
+        // total_participants missing
+        neighbors: [],
+        refreshed_at: 'T',
+      },
+      error: null,
+    });
+    await expect(getUserRank('u-me')).rejects.toThrow('malformed_row:total_participants');
+  });
+
+  it('throws malformed_row:neighbors when the RPC returns a non-array neighbors field', async () => {
+    // Regression for N4: previously `data.neighbors.map(...)` would
+    // crash with "TypeError: ... .map is not a function" if the RPC
+    // returned an object instead of an array. Now surfaced as a
+    // clean malformed_row error consistent with the mapper boundary.
+    mockRpcQueue.push({
+      data: {
+        rank: 5,
+        points: 350,
+        total_participants: 100,
+        neighbors: {} as unknown,
+        refreshed_at: 'T',
+      },
+      error: null,
+    });
+    await expect(getUserRank('u-me')).rejects.toThrow('malformed_row:neighbors');
+  });
+
+  it('throws malformed_row:neighbors[] when a single neighbor row is not an object', async () => {
+    mockRpcQueue.push({
+      data: {
+        rank: 5,
+        points: 350,
+        total_participants: 100,
+        neighbors: [null],
+        refreshed_at: 'T',
+      },
+      error: null,
+    });
+    await expect(getUserRank('u-me')).rejects.toThrow('malformed_row:neighbors[]');
   });
 });

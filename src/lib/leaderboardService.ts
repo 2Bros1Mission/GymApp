@@ -7,9 +7,10 @@ import type {
 
 // The generated Database type predates the leaderboard tables; until it's
 // regenerated, work through an untyped view for these reads. Row-level
-// shapes are validated at the mapper boundary (assertString / assertNumber).
+// shapes are validated at the mapper boundary (asString / asNumber /
+// validateRankPayload).
 //
-// TODO(#137-followup): once `supabase gen types typescript` is rerun against
+// TODO(#138-followup): once `supabase gen types typescript` is rerun against
 // migrations 20260601..20260629 the launder + per-call casts here can go.
 type SupabaseClient = typeof supabase;
 type SupabaseFrom = SupabaseClient['from'];
@@ -92,7 +93,13 @@ function mapRowToHistory(row: Record<string, unknown>): LeaderboardHistoryEntry 
   // PostgREST serializes it as 'YYYY-MM-01'. The public contract is
   // 'YYYY-MM' (LeaderboardHistoryEntry.month), so slice off the day part
   // here at the boundary instead of leaking the 10-char form to consumers.
+  // Validate the shape before slicing — if PostgREST ever serializes the
+  // column differently (timezone-converted timestamp, alt year format) the
+  // slice would silently produce garbage like '26-05-0'.
   const raw = asString(row, 'month');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new Error('malformed_row:month');
+  }
   return {
     month: raw.slice(0, 7),
     rank: asNumber(row, 'final_rank'),
@@ -148,6 +155,42 @@ interface RankInfoPayload {
   profile_missing?: boolean;
 }
 
+// Validate the RPC payload at the mapper boundary, same discipline as
+// mapRowToEntry / mapRowToHistory — if fn_get_user_rank_info ever returns
+// malformed jsonb (missing total_participants, neighbors as object instead
+// of array, etc.), surface it as a clean malformed_row error rather than
+// letting `undefined as number` poison downstream math or .map() crash on
+// a non-array.
+function validateRankPayload(data: Record<string, unknown>): RankInfoPayload {
+  const rank = data.rank;
+  if (rank !== null && (typeof rank !== 'number' || !Number.isFinite(rank))) {
+    throw new Error('malformed_row:rank');
+  }
+  const points = data.points;
+  if (typeof points !== 'number' || !Number.isFinite(points)) {
+    throw new Error('malformed_row:points');
+  }
+  const total = data.total_participants;
+  if (typeof total !== 'number' || !Number.isFinite(total)) {
+    throw new Error('malformed_row:total_participants');
+  }
+  if (!Array.isArray(data.neighbors)) {
+    throw new Error('malformed_row:neighbors');
+  }
+  const refreshed = data.refreshed_at;
+  if (refreshed !== null && typeof refreshed !== 'string') {
+    throw new Error('malformed_row:refreshed_at');
+  }
+  return {
+    rank,
+    points,
+    total_participants: total,
+    neighbors: data.neighbors as Record<string, unknown>[],
+    refreshed_at: refreshed,
+    profile_missing: data.profile_missing === true,
+  };
+}
+
 export async function getUserRank(userId: string): Promise<UserRankInfo> {
   const safeUserId = assertNonEmptyUserId(userId);
 
@@ -160,7 +203,7 @@ export async function getUserRank(userId: string): Promise<UserRankInfo> {
   // special-case `rank: null` for users outside the top 100.
   const { data, error } = (await sb.rpc('fn_get_user_rank_info', {
     p_user_id: safeUserId,
-  })) as unknown as { data: RankInfoPayload | null; error: unknown };
+  })) as unknown as { data: Record<string, unknown> | null; error: unknown };
 
   expectOk('getUserRank', error, 'Failed to load user rank');
 
@@ -170,7 +213,9 @@ export async function getUserRank(userId: string): Promise<UserRankInfo> {
     throw new Error('Failed to load user rank');
   }
 
-  if (data.profile_missing) {
+  const payload = validateRankPayload(data);
+
+  if (payload.profile_missing) {
     // handle_new_user trigger invariant: every auth user has a profile.
     // Reaching this branch means the invariant was violated (manual
     // delete bypassing CASCADE, trigger disabled). Surface it as a
@@ -179,9 +224,14 @@ export async function getUserRank(userId: string): Promise<UserRankInfo> {
   }
 
   return {
-    rank: data.rank,
-    points: data.points,
-    totalParticipants: data.total_participants,
-    neighbors: (data.neighbors ?? []).map((n) => mapRowToEntry(n)),
+    rank: payload.rank,
+    points: payload.points,
+    totalParticipants: payload.total_participants,
+    neighbors: payload.neighbors.map((n) => {
+      if (n === null || typeof n !== 'object') {
+        throw new Error('malformed_row:neighbors[]');
+      }
+      return mapRowToEntry(n as Record<string, unknown>);
+    }),
   };
 }

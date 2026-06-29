@@ -1,5 +1,5 @@
 -- ============================================================
--- Issue #137 follow-up #1: fn_get_user_rank_info RPC
+-- Issue #138 follow-up #1: fn_get_user_rank_info RPC
 --
 -- Atomic 1-round-trip read for the My Rank widget. Replaces the
 -- previous 2-statement client-side composition in
@@ -17,6 +17,9 @@
 --      "User's own rank — Always visible (even if outside top 100)"
 --      via COUNT(*) FROM profiles WHERE leaderboard_points > $mine.
 --      Index idx_profiles_leaderboard_points (#129) covers it.
+--      Zero-point users are an exception — they have no relative
+--      rank against a >0-point pool, so we return NULL for them
+--      and leave the UI to show "unranked" copy.
 --
 --  (b) total_participants is the count of profiles with
 --      leaderboard_points > 0, NOT the snapshot size (which is
@@ -29,6 +32,9 @@
 -- leaderboard_points DESC, leaderboard_points_updated_at ASC,
 -- name ASC, id ASC. A user tied at $mine but who reached that
 -- score earlier ranks above us.
+--
+-- search_path is hardened with pg_temp per CVE-2018-1058 — matches
+-- every other SECURITY DEFINER function in the repo.
 -- ============================================================
 
 create or replace function public.fn_get_user_rank_info(
@@ -37,25 +43,19 @@ create or replace function public.fn_get_user_rank_info(
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
-  v_caller_id uuid := auth.uid();
   v_own record;
   v_me_profile record;
   v_higher_count integer;
   v_total integer;
   v_neighbors jsonb;
 begin
-  if v_caller_id is null then
-    return jsonb_build_object(
-      'rank', null,
-      'points', 0,
-      'total_participants', 0,
-      'neighbors', '[]'::jsonb,
-      'refreshed_at', null
-    );
-  end if;
+  -- Anon callers cannot reach this body — `grant execute … to
+  -- authenticated` at the bottom rejects them at the PostgREST
+  -- layer with a 403 before plpgsql runs. No defensive
+  -- auth.uid() short-circuit needed.
 
   -- Total participants — count of profiles with non-zero points.
   -- Matches the filter used in refresh_leaderboard_snapshot, so the
@@ -109,10 +109,11 @@ begin
   where id = p_user_id;
 
   if not found then
-    -- No auth user implies no profile (handle_new_user trigger
-    -- guarantees the inverse). Reaching here means manual deletion
-    -- or a bypassed trigger — log via the caller's console.warn
-    -- path. Return shape consistent with off-board zero-point.
+    -- No profile row for an authenticated user implies the
+    -- handle_new_user trigger invariant was violated (manual
+    -- deletion or bypassed trigger). Surface it so the caller can
+    -- console.warn. Shape stays compatible with the zero-point
+    -- branch below.
     return jsonb_build_object(
       'rank', null,
       'points', 0,
@@ -120,6 +121,21 @@ begin
       'neighbors', '[]'::jsonb,
       'refreshed_at', null,
       'profile_missing', true
+    );
+  end if;
+
+  if v_me_profile.leaderboard_points = 0 then
+    -- Zero-point users have no relative rank — the >0-point cohort
+    -- they would rank against doesn't include them. Returning
+    -- count+1 here would surface "rank 5001 of 5000" (off by one
+    -- in the worst direction). Encode as rank=null and let the UI
+    -- render "unranked" copy.
+    return jsonb_build_object(
+      'rank', null,
+      'points', 0,
+      'total_participants', v_total,
+      'neighbors', '[]'::jsonb,
+      'refreshed_at', null
     );
   end if;
 
@@ -141,9 +157,8 @@ begin
 end;
 $$;
 
--- Lock down the function surface. The auth.uid() guard above
--- short-circuits to a zero shape for anon callers, but we revoke
--- PUBLIC explicitly so a future GRANT TO public on schema cannot
--- accidentally expose this RPC.
+-- Lock down the function surface. revoke from PUBLIC + grant to
+-- authenticated means anon callers get a 403 from PostgREST before
+-- the function body executes.
 revoke execute on function public.fn_get_user_rank_info(uuid) from public;
 grant execute on function public.fn_get_user_rank_info(uuid) to authenticated;
