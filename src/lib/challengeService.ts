@@ -36,8 +36,7 @@ const sb = supabase as unknown as {
 // feedbackService.ts). Mutations (`pickChallenge`) do NOT take a
 // userId — they go through the RPC which reads `auth.uid()` directly.
 //
-// TODO (future issues): #137 owns getActiveChallenges, abandonChallenge,
-// reportProgress; #138 owns leaderboard reads; #139 owns trainer
+// TODO (future issues): #138 owns leaderboard reads; #139 owns trainer
 // challenge writes. This file will accumulate them.
 
 const POOL_SIZE = { daily: 3, weekly: 3, monthly: 5 } as const;
@@ -271,6 +270,189 @@ export interface PickChallengeResult {
   availableAt?: string;
 }
 
+// ─── Deadline computation (4AM Europe/Sofia boundary) ──────────────────────
+//
+// Returns the next deadline timestamp for a given cadence. Implementation
+// uses native Date with manual Sofia offset math — Sofia is UTC+2 (EET)
+// in winter and UTC+3 (EEST) in summer. We rely on Intl.DateTimeFormat
+// for the offset rather than hardcoding DST rules.
+
+// Lazy singleton: constructing Intl.DateTimeFormat is heavy (pulls in tz
+// data and compiles a formatter), and the options never vary. Building it
+// per call to sofiaOffsetMinutes meant N allocations per render. We
+// initialize on first use rather than at module import so that any future
+// runtime without 'Europe/Sofia' tz data degrades the My-Challenges screen
+// instead of breaking the import for every screen that transitively pulls
+// this module.
+let sofiaFormatter: Intl.DateTimeFormat | null = null;
+function getSofiaFormatter(): Intl.DateTimeFormat {
+  if (sofiaFormatter === null) {
+    sofiaFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Sofia',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+  return sofiaFormatter;
+}
+
+function sofiaOffsetMinutes(at: Date): number {
+  // Asia approach: format the moment in Sofia and compute UTC delta.
+  const sofiaParts = getSofiaFormatter().formatToParts(at);
+  const m: Record<string, string> = {};
+  for (const p of sofiaParts) if (p.type !== 'literal') m[p.type] = p.value;
+  // Reconstruct as if Sofia local time were UTC, then diff against the real UTC.
+  const asIfUtc = Date.UTC(
+    Number(m.year),
+    Number(m.month) - 1,
+    Number(m.day),
+    Number(m.hour),
+    Number(m.minute),
+    Number(m.second)
+  );
+  return Math.round((asIfUtc - at.getTime()) / 60000);
+}
+
+// Exported for tests; not part of the public service API. Callers should
+// consume `timeRemaining` on ActiveChallengeWithDetails instead of calling
+// this directly. Marked with the underscore prefix to signal "internal".
+export function _computeDeadlineForTest(
+  cadence: 'daily' | 'weekly' | 'monthly' | 'one_time',
+  now: Date,
+  endDate: string | null
+): string | null {
+  return computeDeadline(cadence, now, endDate);
+}
+
+// Maps a calendar-day end_date ("YYYY-MM-DD") or a full ISO timestamp to
+// the hard expiry instant in true UTC. Calendar-day input: treat as the
+// LAST playable day under the 4AM Sofia convention → the expiry is the
+// next morning at 04:00 Sofia. ISO timestamp input: pass through unchanged
+// (it's already a precise instant).
+function endOfDaySofia(endDate: string): Date | null {
+  // Postgres `date` columns serialize as "YYYY-MM-DD". Anything else (full
+  // ISO with 'T') we leave alone — the caller already knows the exact
+  // instant they want.
+  if (!endDate.includes('T')) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(endDate);
+    if (!match) return null;
+    const [, y, mo, d] = match;
+    // Construct next-day 04:00 as if it were UTC, then shift to true UTC
+    // using the Sofia offset at that instant (handles DST symmetrically
+    // with the main computeDeadline logic).
+    const nextDayUtcWall = new Date(
+      Date.UTC(Number(y), Number(mo) - 1, Number(d) + 1, 4, 0, 0)
+    );
+    const offset = sofiaOffsetMinutes(nextDayUtcWall);
+    return new Date(nextDayUtcWall.getTime() - offset * 60000);
+  }
+  const parsed = new Date(endDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function computeDeadline(
+  cadence: 'daily' | 'weekly' | 'monthly' | 'one_time',
+  now: Date,
+  endDate: string | null
+): string | null {
+  if (cadence === 'one_time') {
+    // one_time: the challenge's hard expiry IS the end date (under the
+    // 4AM Sofia day-boundary convention if end_date is calendar-day).
+    if (!endDate) return null;
+    const expiry = endOfDaySofia(endDate);
+    return expiry ? expiry.toISOString() : null;
+  }
+
+  const offsetMin = sofiaOffsetMinutes(now);
+  // Convert "now" into a virtual Sofia-local instant by shifting the UTC clock.
+  const sofiaNow = new Date(now.getTime() + offsetMin * 60000);
+  const sofiaYear = sofiaNow.getUTCFullYear();
+  const sofiaMonth = sofiaNow.getUTCMonth();
+  const sofiaDate = sofiaNow.getUTCDate();
+  const sofiaHour = sofiaNow.getUTCHours();
+  const sofiaDow = sofiaNow.getUTCDay(); // 0=Sun..6=Sat
+
+  let target: Date;
+  if (cadence === 'daily') {
+    // Next 4AM Sofia. If we're past 4AM today, jump to tomorrow.
+    const dayOffset = sofiaHour >= 4 ? 1 : 0;
+    target = new Date(Date.UTC(sofiaYear, sofiaMonth, sofiaDate + dayOffset, 4, 0, 0));
+  } else if (cadence === 'weekly') {
+    // Next Monday 4AM Sofia. Monday = 1; if today is Monday after 4AM, jump 7 days.
+    const daysUntilMonday = (8 - sofiaDow) % 7 || 7;
+    const dayOffset = sofiaDow === 1 && sofiaHour < 4 ? 0 : daysUntilMonday;
+    target = new Date(Date.UTC(sofiaYear, sofiaMonth, sofiaDate + dayOffset, 4, 0, 0));
+  } else {
+    // monthly: 1st of next month at 4AM Sofia.
+    target = new Date(Date.UTC(sofiaYear, sofiaMonth + 1, 1, 4, 0, 0));
+  }
+
+  // Shift the Sofia-local target back to true UTC. Use the offset at the
+  // TARGET instant, not at `now` — otherwise a deadline that crosses the
+  // DST boundary (spring or autumn) is off by one hour twice a year.
+  const targetOffsetMin = sofiaOffsetMinutes(target);
+  const targetUtc = new Date(target.getTime() - targetOffsetMin * 60000);
+
+  // Clamp to challenge.endDate: a daily/weekly/monthly challenge whose end
+  // date has passed must not advertise a future "next 4AM" deadline. The
+  // participant row can outlive the challenge (no auto-expire trigger), so
+  // computeDeadline is the last line of defense for the UI.
+  //
+  // `challenges.end_date` is a Postgres `date` (calendar day, no time) —
+  // PostgREST returns it as "YYYY-MM-DD". The 4AM-Sofia day-boundary
+  // convention says a calendar day runs from 04:00 Sofia to 04:00 Sofia
+  // next morning, so a challenge with end_date='2026-01-15' is genuinely
+  // playable through 2026-01-16T04:00 Sofia. Naive `new Date("2026-01-15")`
+  // parses as UTC midnight — 02:00-03:00 Sofia depending on DST — which
+  // would show the challenge as already expired on the morning of its
+  // actual last day. Compute the true hard expiry instead.
+  if (endDate) {
+    const expiry = endOfDaySofia(endDate);
+    if (expiry !== null && expiry.getTime() < targetUtc.getTime()) {
+      return expiry.toISOString();
+    }
+  }
+  return targetUtc.toISOString();
+}
+
+// ─── My-Challenges types (#137) ─────────────────────────────────────────────
+
+export interface ActiveChallengeWithDetails {
+  participant: ChallengeParticipant;
+  challenge: Challenge;
+  progressPercentage: number;
+  /** ISO 8601 timestamp of the next deadline, or null if no deadline applies. */
+  timeRemaining: string | null;
+  isStreakBroken: boolean;
+  /** Number of streak days lost vs. longest. Null for non-streak challenges. */
+  streakComebackDiff: number | null;
+}
+
+export interface AbandonResult {
+  ok: boolean;
+  error?: 'not_active' | 'unknown';
+}
+
+export type ReportProgressError =
+  | 'not_self_reported'
+  | 'not_active'
+  | 'invalid_value'
+  | 'not_found'
+  | 'unauthenticated'
+  | 'unknown';
+
+export interface ReportResult {
+  ok: boolean;
+  newProgress?: number;
+  completed?: boolean;
+  error?: ReportProgressError;
+}
+
 /**
  * Atomically pick a platform challenge from the discovery pool.
  *
@@ -401,4 +583,178 @@ export async function getUserChallengeState(userId: string): Promise<UserChallen
       cooldownEndsAt,
     };
   });
+}
+
+// ─── My Challenges ──────────────────────────────────────────────────────────
+
+/**
+ * Returns the user's active challenges with derived UI fields
+ * (progress %, deadline, streak-comeback signals). For streak-type
+ * challenges, the trigger from #133 writes the current streak count
+ * into `current_progress`, so `currentProgress` IS the current streak.
+ *
+ * Comeback fields are populated only for `challengeType === 'streak'`;
+ * for frequency / custom types they are `false` / `null` because
+ * `longestStreak` is not meaningful in those contexts.
+ */
+export async function getActiveChallenges(
+  userId: string
+): Promise<ActiveChallengeWithDetails[]> {
+  const { data, error } = await sb
+    .from('challenge_participants')
+    .select('*, challenge:challenges(*)')
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('getActiveChallenges failed', error);
+    throw new Error('Failed to load active challenges');
+  }
+
+  const now = new Date();
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return rows
+    // Filter orphans: a participant row whose joined `challenge` is null
+    // (FK cascade should make this unreachable, but RLS can hide the parent
+    // row in tenancy edge cases). mapRowToParticipant substitutes {} for a
+    // missing challenge, which would silently produce wrong cadence and
+    // NaN progress downstream.
+    .filter((row) => row.challenge != null)
+    .map((row) => {
+      const participant = mapRowToParticipant(row);
+      const challenge = participant.challenge;
+      // `target_value > 0` is enforced by CHECK constraints on both
+      // challenges and challenge_participants (see
+      // 20260601120000_challenges_core_tables.sql), so division here is safe.
+      const progressPercentage = Math.min(
+        100,
+        (participant.currentProgress / participant.targetValue) * 100
+      );
+      const timeRemaining = computeDeadline(challenge.cadence, now, challenge.endDate);
+      const isStreak = challenge.challengeType === 'streak';
+      // For streak challenges, surface comeback info in two fields:
+      //   - isStreakBroken: strict "you are behind your previous best".
+      //   - streakComebackDiff: how far behind, in days.
+      //     - positive N: behind by N days
+      //     - 0: matched your previous best (UI: "matched your record!")
+      //     - null: not applicable — either non-streak, the user has
+      //       never built a streak yet (longestStreak === 0; surfacing
+      //       "matched your record!" on day zero is misleading), or
+      //       they're strictly beating their best (negative diff is
+      //       meaningless to render).
+      const diff = participant.longestStreak - participant.currentProgress;
+      const comebackDiff =
+        isStreak && participant.longestStreak > 0 && diff >= 0 ? diff : null;
+      return {
+        participant,
+        challenge,
+        progressPercentage,
+        timeRemaining,
+        isStreakBroken: comebackDiff !== null && comebackDiff > 0,
+        streakComebackDiff: comebackDiff,
+      };
+    });
+}
+
+/**
+ * Marks an active participation as abandoned. Caller's identity is
+ * enforced by RLS (#130) — the UPDATE policy on challenge_participants
+ * requires `user_id = auth.uid()` server-side, so an unauthenticated or
+ * cross-user attempt simply matches zero rows and returns `not_active`.
+ *
+ * We deliberately do NOT call supabase.auth.getSession() here: per
+ * Supabase docs, getSession() reads local storage without server
+ * verification and can return a stale session. Putting it in front of
+ * RLS doesn't add defense — RLS catches anything getSession() catches,
+ * and adds nothing for valid sessions — while breaking UX during token
+ * refresh races. Matches the pickChallenge pattern.
+ */
+export async function abandonChallenge(challengeId: string): Promise<AbandonResult> {
+  const { data, error } = await sb
+    .from('challenge_participants')
+    .update({ status: 'abandoned' })
+    .eq('challenge_id', challengeId)
+    .eq('status', 'active')
+    .select('id');
+
+  if (error) {
+    console.error('abandonChallenge failed', error);
+    return { ok: false, error: 'unknown' };
+  }
+  const rows = (data ?? []) as { id: string }[];
+  if (rows.length === 0) return { ok: false, error: 'not_active' };
+  return { ok: true };
+}
+
+/**
+ * Reports incremental progress on a `custom_self_reported` challenge.
+ * Calls `fn_report_progress` server-side — atomic transaction with row
+ * lock prevents double-completion. Returns ReportResult with newProgress
+ * (capped at target) and completed flag.
+ */
+export async function reportProgress(
+  challengeId: string,
+  value: number
+): Promise<ReportResult> {
+  // Client-side validation. The TS `number` type does NOT exclude NaN /
+  // Infinity / floats at runtime, and JSON.stringify serializes both
+  // NaN and Infinity as `null` (ECMA-262 §25.5.2). PostgREST passes JSON
+  // null through to the SQL function as NULL, which would slip past the
+  // server's `p_value <= 0 or p_value > 100000` guard via three-valued
+  // logic (NULL OR NULL → NULL → falsy). Catch it here so the typed
+  // error contract is honored.
+  if (!Number.isInteger(value) || value <= 0 || value > 100000) {
+    return { ok: false, error: 'invalid_value' };
+  }
+
+  const { data, error } = await sb.rpc('fn_report_progress', {
+    p_challenge_id: challengeId,
+    p_value: value,
+  });
+
+  if (error) {
+    console.error('fn_report_progress failed', error);
+    return { ok: false, error: 'unknown' };
+  }
+
+  const result = (data ?? {}) as {
+    ok?: boolean;
+    error?: ReportProgressError;
+    new_progress?: number;
+    completed?: boolean;
+  };
+
+  if (result.ok) {
+    return {
+      ok: true,
+      newProgress: result.new_progress,
+      completed: result.completed,
+    };
+  }
+
+  return { ok: false, error: result.error ?? 'unknown' };
+}
+
+/**
+ * Returns the user's completed and abandoned challenges, newest first.
+ * Default limit 20; pass a different value for paginated history views.
+ */
+export async function getChallengeHistory(
+  userId: string,
+  limit: number = 20
+): Promise<ChallengeParticipant[]> {
+  const { data, error } = await sb
+    .from('challenge_participants')
+    .select('*, challenge:challenges(*)')
+    .eq('user_id', userId)
+    .in('status', ['completed', 'abandoned'])
+    .order('completed_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('getChallengeHistory failed', error);
+    throw new Error('Failed to load challenge history');
+  }
+
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapRowToParticipant);
 }
