@@ -1,9 +1,11 @@
 import { supabase } from './supabase';
 import { asNumber, asString } from './rowGuards';
+import { mapRowToChallenge } from './challengeService';
 import type {
   CreateTrainerChallengeParams,
   SaveTemplateParams,
   TrainerChallengeTemplate,
+  TrainerChallengeWithProgress,
 } from '../types';
 
 // The generated Database type predates the challenge tables; until it's
@@ -175,4 +177,50 @@ export async function updateClientProgress(
     return { success: false, error: result?.error ?? 'unknown' };
   }
   return { success: true, completed: result.completed === true };
+}
+
+// ─── Reads ───────────────────────────────────────────────────────────────────
+
+interface ParticipantStatsRow {
+  user_id: string;
+  status: string;
+  current_progress: number;
+  target_value: number;
+}
+
+function participantPct(p: ParticipantStatsRow): number {
+  if (p.target_value <= 0) return 0;
+  return Math.min(100, Math.round((p.current_progress / p.target_value) * 100));
+}
+
+export async function getTrainerChallenges(
+  trainerId: string,
+  status?: 'active' | 'completed',
+): Promise<TrainerChallengeWithProgress[]> {
+  let query = sb
+    .from('challenges')
+    .select('*, challenge_participants(user_id, status, current_progress, target_value)')
+    .eq('creator_id', trainerId)
+    .eq('source', 'trainer');
+  if (status) {
+    query = query.eq('status', status);
+  }
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) {
+    console.error('[trainerChallengeService] getTrainerChallenges:', error);
+    throw new Error('Failed to load trainer challenges');
+  }
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const participants = (row.challenge_participants as ParticipantStatsRow[] | null) ?? [];
+    const completedCount = participants.filter((p) => p.status === 'completed').length;
+    const averageProgress = participants.length === 0
+      ? 0
+      : Math.round(participants.reduce((sum, p) => sum + participantPct(p), 0) / participants.length);
+    return {
+      challenge: mapRowToChallenge(row),
+      participantCount: participants.length,
+      completedCount,
+      averageProgress,
+    };
+  });
 }

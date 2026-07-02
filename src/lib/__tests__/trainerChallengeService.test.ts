@@ -4,6 +4,7 @@ import {
   deleteTrainerTemplate,
   createTrainerChallenge,
   updateClientProgress,
+  getTrainerChallenges,
 } from '../trainerChallengeService';
 
 interface QueryRecord {
@@ -302,5 +303,95 @@ describe('updateClientProgress', () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'x', code: '08000' } });
     const res = await updateClientProgress('ch-1', 'client-1', 5);
     expect(res).toEqual({ success: false, error: 'unknown' });
+  });
+});
+
+// ─── getTrainerChallenges ───────────────────────────────────────────────────
+
+const challengeRow = (id: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  template_id: null,
+  creator_id: 'trainer-1',
+  source: 'trainer',
+  title: `Challenge ${id}`,
+  title_bg: null,
+  description: null,
+  description_bg: null,
+  challenge_type: 'custom_self_reported',
+  cadence: 'one_time',
+  difficulty: 'medium',
+  target_value: 10,
+  points: 100,
+  category: null,
+  status: 'active',
+  start_date: '2026-07-06',
+  end_date: '2026-07-13',
+  created_at: '2026-07-02T10:00:00Z',
+  ...extra,
+});
+
+describe('getTrainerChallenges', () => {
+  it('aggregates participant stats per challenge', async () => {
+    mockQueue.push({
+      data: [
+        {
+          ...challengeRow('ch-1'),
+          challenge_participants: [
+            { user_id: 'c-1', status: 'active', current_progress: 5, target_value: 10 },
+            { user_id: 'c-2', status: 'completed', current_progress: 15, target_value: 15 },
+          ],
+        },
+        {
+          ...challengeRow('ch-2'),
+          challenge_participants: [],
+        },
+      ],
+      error: null,
+    });
+    const out = await getTrainerChallenges('trainer-1');
+    expect(out).toHaveLength(2);
+    expect(out[0].participantCount).toBe(2);
+    expect(out[0].completedCount).toBe(1);
+    expect(out[0].averageProgress).toBe(75); // (50% + 100%) / 2
+    expect(out[0].challenge.id).toBe('ch-1');
+    expect(out[1]).toMatchObject({ participantCount: 0, completedCount: 0, averageProgress: 0 });
+    expect(mockQueries[0]).toMatchObject({
+      table: 'challenges',
+      filters: [
+        { method: 'eq', args: ['creator_id', 'trainer-1'] },
+        { method: 'eq', args: ['source', 'trainer'] },
+        { method: 'order', args: ['created_at', { ascending: false }] },
+      ],
+    });
+  });
+
+  it('passes the status filter through', async () => {
+    mockQueue.push({ data: [], error: null });
+    await getTrainerChallenges('trainer-1', 'completed');
+    expect(mockQueries[0].filters).toContainEqual({ method: 'eq', args: ['status', 'completed'] });
+  });
+
+  it('returns an empty array when the trainer has no challenges', async () => {
+    mockQueue.push({ data: [], error: null });
+    await expect(getTrainerChallenges('trainer-1')).resolves.toEqual([]);
+  });
+
+  it('clamps per-participant progress at 100% in the average', async () => {
+    mockQueue.push({
+      data: [{
+        ...challengeRow('ch-1'),
+        challenge_participants: [
+          { user_id: 'c-1', status: 'active', current_progress: 30, target_value: 10 },
+        ],
+      }],
+      error: null,
+    });
+    const out = await getTrainerChallenges('trainer-1');
+    expect(out[0].averageProgress).toBe(100);
+  });
+
+  it('throws a generic message on PostgrestError', async () => {
+    mockQueue.push({ data: null, error: { message: 'boom', code: '08000' } });
+    await expect(getTrainerChallenges('trainer-1')).rejects.toThrow('Failed to load trainer challenges');
   });
 });
