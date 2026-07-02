@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { WorkoutCategory } from '../types';
 
 interface SetData {
   setNumber: number;
@@ -21,10 +22,15 @@ interface SaveWorkoutParams {
   durationSeconds: number;
   exercises: ExerciseData[];
   notes?: string;
+  // Optional per-workout category. The DB layer normalizes (lower+trim
+  // via BEFORE INSERT trigger) and validates (CHECK constraint over the
+  // 6-value whitelist) before commit, so callers get a clean 23514 if
+  // they somehow bypass the WorkoutCategory type at the boundary.
+  category?: WorkoutCategory | null;
 }
 
 export async function saveWorkoutLog(params: SaveWorkoutParams): Promise<{ error: string | null; workoutLogId?: string }> {
-  const { userId, workoutId, workoutName, durationSeconds, exercises, notes } = params;
+  const { userId, workoutId, workoutName, durationSeconds, exercises, notes, category } = params;
 
   const { data, error } = await supabase.rpc('save_workout', {
     p_user_id: userId,
@@ -32,6 +38,10 @@ export async function saveWorkoutLog(params: SaveWorkoutParams): Promise<{ error
     p_workout_name: workoutName,
     p_duration_seconds: durationSeconds,
     p_notes: notes ?? undefined,
+    // Undefined (not null) so the RPC's `default null` kicks in for
+    // callers who don't pass a category — keeps the wire payload
+    // symmetric with the pre-#148 shape.
+    p_category: category ?? undefined,
     p_exercises: exercises.map((ex) => ({
       exerciseId: ex.exerciseId,
       exerciseName: ex.exerciseName,
