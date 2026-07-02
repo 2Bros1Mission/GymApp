@@ -150,3 +150,29 @@ export async function createTrainerChallenge(
   }
   return { success: true, challengeId: result.challenge_id };
 }
+
+// ─── Manual progress (custom_self_reported only) ────────────────────────────
+
+export async function updateClientProgress(
+  challengeId: string,
+  clientId: string,
+  value: number,
+): Promise<{ success: boolean; completed?: boolean; error?: string }> {
+  if (!isValidIntInRange(value, 1, 100000)) {
+    return { success: false, error: 'invalid_value' };
+  }
+  const { data, error } = await sb.rpc('fn_trainer_update_progress', {
+    p_challenge_id: challengeId,
+    p_client_id: clientId,
+    p_value: value,
+  });
+  if (error) {
+    console.error('[trainerChallengeService] updateClientProgress:', error);
+    return { success: false, error: 'unknown' };
+  }
+  const result = data as unknown as { ok?: boolean; error?: string; completed?: boolean } | null;
+  if (!result?.ok) {
+    return { success: false, error: result?.error ?? 'unknown' };
+  }
+  return { success: true, completed: result.completed === true };
+}

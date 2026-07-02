@@ -3,6 +3,7 @@ import {
   getTrainerTemplates,
   deleteTrainerTemplate,
   createTrainerChallenge,
+  updateClientProgress,
 } from '../trainerChallengeService';
 
 interface QueryRecord {
@@ -256,5 +257,50 @@ describe('createTrainerChallenge', () => {
     expect(res).toEqual({ success: false, error: 'unknown' });
     expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[trainerChallengeService] createTrainerChallenge:');
     expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
+  });
+});
+
+// ─── updateClientProgress ───────────────────────────────────────────────────
+
+describe('updateClientProgress', () => {
+  it('calls the RPC and returns completed=false while below target', async () => {
+    mockRpc.mockResolvedValue({ data: { ok: true, completed: false }, error: null });
+    const res = await updateClientProgress('ch-1', 'client-1', 7);
+    expect(res).toEqual({ success: true, completed: false });
+    expect(mockRpc).toHaveBeenCalledWith('fn_trainer_update_progress', {
+      p_challenge_id: 'ch-1',
+      p_client_id: 'client-1',
+      p_value: 7,
+    });
+  });
+
+  it('returns completed=true when the RPC reports completion', async () => {
+    mockRpc.mockResolvedValue({ data: { ok: true, completed: true }, error: null });
+    const res = await updateClientProgress('ch-1', 'client-1', 10);
+    expect(res).toEqual({ success: true, completed: true });
+  });
+
+  it.each([0, -3, 100001, 2.5, NaN, Infinity])(
+    'rejects value %p before any network call',
+    async (bad) => {
+      const res = await updateClientProgress('ch-1', 'client-1', bad);
+      expect(res).toEqual({ success: false, error: 'invalid_value' });
+      expect(mockRpc).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['not_found', 'not_allowed', 'invalid_value'])(
+    'surfaces RPC error code %s',
+    async (code) => {
+      mockRpc.mockResolvedValue({ data: { ok: false, error: code }, error: null });
+      const res = await updateClientProgress('ch-1', 'client-1', 5);
+      expect(res).toEqual({ success: false, error: code });
+    },
+  );
+
+  it('returns unknown when the RPC itself errors', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'x', code: '08000' } });
+    const res = await updateClientProgress('ch-1', 'client-1', 5);
+    expect(res).toEqual({ success: false, error: 'unknown' });
   });
 });
