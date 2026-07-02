@@ -95,6 +95,20 @@ describe('saveTrainerTemplate', () => {
     expect(mockQueries).toHaveLength(0);
   });
 
+  it.each(['', '   '])('rejects trainerId %p before any network call', async (bad) => {
+    const res = await saveTrainerTemplate(bad, params);
+    expect(res).toEqual({ success: false, error: 'invalid_input' });
+    expect(mockQueries).toHaveLength(0);
+  });
+
+  it('trims the title in the inserted payload', async () => {
+    mockQueue.push({ data: { id: 'tpl-9' }, error: null });
+    const res = await saveTrainerTemplate('trainer-1', { ...params, title: '  Weekly Cardio Block  ' });
+    expect(res).toEqual({ success: true, id: 'tpl-9' });
+    const insertCall = mockQueries[0].filters.find((f) => f.method === 'insert');
+    expect((insertCall!.args[0] as Record<string, unknown>).title).toBe('Weekly Cardio Block');
+  });
+
   it('returns unknown on PostgrestError and logs the raw error', async () => {
     const raw = { message: 'rls violation', code: '42501' };
     mockQueue.push({ data: null, error: raw });
