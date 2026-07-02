@@ -622,6 +622,7 @@ export type Database = {
       }
       workout_logs: {
         Row: {
+          category: string | null
           completed: boolean
           created_at: string
           date: string
@@ -635,6 +636,7 @@ export type Database = {
           workout_name: string
         }
         Insert: {
+          category?: string | null
           completed?: boolean
           created_at?: string
           date?: string
@@ -648,6 +650,7 @@ export type Database = {
           workout_name: string
         }
         Update: {
+          category?: string | null
           completed?: boolean
           created_at?: string
           date?: string
@@ -683,6 +686,7 @@ export type Database = {
       reject_connection: { Args: { p_connection_id: string }; Returns: Json }
       save_workout: {
         Args: {
+          p_category?: string
           p_duration_seconds: number
           p_exercises?: Json
           p_notes?: string
