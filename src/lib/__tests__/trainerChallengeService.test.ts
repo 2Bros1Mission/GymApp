@@ -5,6 +5,7 @@ import {
   createTrainerChallenge,
   updateClientProgress,
   getTrainerChallenges,
+  getTrainerChallengeDetail,
 } from '../trainerChallengeService';
 
 interface QueryRecord {
@@ -393,5 +394,68 @@ describe('getTrainerChallenges', () => {
   it('throws a generic message on PostgrestError', async () => {
     mockQueue.push({ data: null, error: { message: 'boom', code: '08000' } });
     await expect(getTrainerChallenges('trainer-1')).rejects.toThrow('Failed to load trainer challenges');
+  });
+});
+
+// ─── getTrainerChallengeDetail ──────────────────────────────────────────────
+
+describe('getTrainerChallengeDetail', () => {
+  it('returns the challenge with per-client progress', async () => {
+    mockQueue.push({
+      data: {
+        ...challengeRow('ch-1'),
+        challenge_participants: [
+          {
+            user_id: 'c-1', status: 'active', current_progress: 5, target_value: 10,
+            profile: { name: 'Ivan' },
+          },
+          {
+            user_id: 'c-2', status: 'completed', current_progress: 15, target_value: 15,
+            profile: { name: 'Maria' },
+          },
+        ],
+      },
+      error: null,
+    });
+    const out = await getTrainerChallengeDetail('trainer-1', 'ch-1');
+    expect(out.challenge.id).toBe('ch-1');
+    expect(out.clients).toEqual([
+      { userId: 'c-1', userName: 'Ivan', currentProgress: 5, targetValue: 10, progressPercentage: 50, status: 'active' },
+      { userId: 'c-2', userName: 'Maria', currentProgress: 15, targetValue: 15, progressPercentage: 100, status: 'completed' },
+    ]);
+    expect(mockQueries[0]).toMatchObject({
+      table: 'challenges',
+      filters: [
+        { method: 'eq', args: ['id', 'ch-1'] },
+        { method: 'eq', args: ['creator_id', 'trainer-1'] },
+        { method: 'eq', args: ['source', 'trainer'] },
+      ],
+    });
+  });
+
+  it('filters out participants whose profile join is null (R5)', async () => {
+    mockQueue.push({
+      data: {
+        ...challengeRow('ch-1'),
+        challenge_participants: [
+          { user_id: 'c-1', status: 'active', current_progress: 5, target_value: 10, profile: null },
+          { user_id: 'c-2', status: 'active', current_progress: 2, target_value: 10, profile: { name: 'Maria' } },
+        ],
+      },
+      error: null,
+    });
+    const out = await getTrainerChallengeDetail('trainer-1', 'ch-1');
+    expect(out.clients).toHaveLength(1);
+    expect(out.clients[0].userName).toBe('Maria');
+  });
+
+  it('throws when the challenge is missing or not owned', async () => {
+    mockQueue.push({ data: null, error: null });
+    await expect(getTrainerChallengeDetail('trainer-1', 'ch-x')).rejects.toThrow('Failed to load challenge detail');
+  });
+
+  it('throws a generic message on PostgrestError', async () => {
+    mockQueue.push({ data: null, error: { message: 'boom', code: '08000' } });
+    await expect(getTrainerChallengeDetail('trainer-1', 'ch-1')).rejects.toThrow('Failed to load challenge detail');
   });
 });

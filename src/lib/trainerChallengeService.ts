@@ -6,6 +6,8 @@ import type {
   SaveTemplateParams,
   TrainerChallengeTemplate,
   TrainerChallengeWithProgress,
+  TrainerChallengeDetail,
+  TrainerClientProgress,
 } from '../types';
 
 // The generated Database type predates the challenge tables; until it's
@@ -223,4 +225,41 @@ export async function getTrainerChallenges(
       averageProgress,
     };
   });
+}
+
+export async function getTrainerChallengeDetail(
+  trainerId: string,
+  challengeId: string,
+): Promise<TrainerChallengeDetail> {
+  const { data, error } = await sb
+    .from('challenges')
+    .select('*, challenge_participants(user_id, status, current_progress, target_value, profile:profiles(name))')
+    .eq('id', challengeId)
+    .eq('creator_id', trainerId)
+    .eq('source', 'trainer')
+    .maybeSingle();
+  if (error) {
+    console.error('[trainerChallengeService] getTrainerChallengeDetail:', error);
+    throw new Error('Failed to load challenge detail');
+  }
+  if (!data) {
+    throw new Error('Failed to load challenge detail');
+  }
+  const row = data as Record<string, unknown>;
+  const participants = (row.challenge_participants as Record<string, unknown>[] | null) ?? [];
+  const clients: TrainerClientProgress[] = participants
+    .filter((p) => p.profile != null) // R5: orphan joins are dropped, not fabricated
+    .map((p) => {
+      const target = asNumber(p, 'target_value');
+      const progress = asNumber(p, 'current_progress');
+      return {
+        userId: asString(p, 'user_id'),
+        userName: asString(p.profile as Record<string, unknown>, 'name'),
+        currentProgress: progress,
+        targetValue: target,
+        progressPercentage: target <= 0 ? 0 : Math.min(100, Math.round((progress / target) * 100)),
+        status: asString(p, 'status') as TrainerClientProgress['status'],
+      };
+    });
+  return { challenge: mapRowToChallenge(row), clients };
 }
