@@ -390,3 +390,47 @@ export interface TrainerChallengeTemplate {
   description: string | null;
   createdAt: string;
 }
+
+export interface CreateTrainerChallengeParams {
+  title: string;
+  titleBg?: string;
+  description?: string;
+  descriptionBg?: string;
+  challengeType: 'frequency' | 'streak' | 'custom_auto' | 'custom_self_reported';
+  targetValue: number;
+  startDate: string; // 'YYYY-MM-DD'
+  endDate: string; // 'YYYY-MM-DD'
+  difficulty: 'easy' | 'medium' | 'hard';
+  points: number; // display-only reward, 0..100000 — never feeds the leaderboard
+  category?: WorkoutCategory;
+  participants: { userId: string; customTargetValue?: number }[]; // 1..50
+}
+
+export interface SaveTemplateParams {
+  title: string;
+  challengeType: 'frequency' | 'streak' | 'custom';
+  targetValue: number;
+  category?: string;
+  description?: string;
+}
+
+export interface TrainerChallengeWithProgress {
+  challenge: Challenge;
+  participantCount: number;
+  completedCount: number;
+  averageProgress: number; // 0-100, rounded
+}
+
+export interface TrainerClientProgress {
+  userId: string;
+  userName: string;
+  currentProgress: number;
+  targetValue: number;
+  progressPercentage: number; // 0-100, rounded, clamped
+  status: ChallengeParticipant['status'];
+}
+
+export interface TrainerChallengeDetail {
+  challenge: Challenge;
+  clients: TrainerClientProgress[];
+}

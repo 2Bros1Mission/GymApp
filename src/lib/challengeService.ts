@@ -48,7 +48,7 @@ type Cadence = 'daily' | 'weekly' | 'monthly';
 
 // ─── Row → domain mappers ────────────────────────────────────────────────────
 
-function mapRowToChallenge(row: Record<string, unknown>): Challenge {
+export function mapRowToChallenge(row: Record<string, unknown>): Challenge {
   return {
     id: row.id as string,
     templateId: (row.template_id as string | null) ?? null,
