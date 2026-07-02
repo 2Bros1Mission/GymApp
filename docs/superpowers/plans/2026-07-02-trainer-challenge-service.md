@@ -20,7 +20,7 @@
 - No `supabase.auth.getSession()` anywhere. No `new Date("YYYY-MM-DD")` anywhere — date comparisons on ISO date strings use plain string comparison.
 - Test fixtures are DB-shaped: snake_case keys, bare `'YYYY-MM-DD'` strings for date columns, explicit nulls.
 - `p_value` in `fn_trainer_update_progress` is the ABSOLUTE new progress, not a delta.
-- Participants per challenge: 1..50. `targetValue`, `customTargetValue`, `points`, progress `value`: integers, `points >= 0`, others `> 0`, all `<= 100000`.
+- Participants per challenge: 1..50. `targetValue`, `customTargetValue`, progress `value`: integers, all `> 0` and `<= 100000`. Trainer challenges always store points = 0 (schema CHECK).
 - Node PATH prefix for every shell command that runs node/npx:
   ```bash
   export PATH="/c/Users/GEORGI/AppData/Local/Microsoft/WinGet/Packages/OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe/node-v24.18.0-win-x64:$PATH"
@@ -55,7 +55,6 @@ export interface CreateTrainerChallengeParams {
   startDate: string; // 'YYYY-MM-DD'
   endDate: string; // 'YYYY-MM-DD'
   difficulty: 'easy' | 'medium' | 'hard';
-  points: number; // display-only reward, 0..100000 — never feeds the leaderboard
   category?: WorkoutCategory;
   participants: { userId: string; customTargetValue?: number }[]; // 1..50
 }
@@ -155,7 +154,7 @@ git commit -m "feat(types): add trainer challenge types, shared row guards, expo
 
 **Interfaces:**
 - Consumes: `challenges`, `challenge_participants`, `trainer_clients`, `profiles` tables (all existing).
-- Produces: `public.fn_create_trainer_challenge(p_title text, p_title_bg text, p_description text, p_description_bg text, p_challenge_type text, p_target_value integer, p_start_date date, p_end_date date, p_difficulty text, p_points integer, p_category text, p_participants jsonb) returns jsonb`; `public.fn_trainer_update_progress(p_challenge_id uuid, p_client_id uuid, p_value integer) returns jsonb`. Tasks 4–5 call these via `sb.rpc(...)`.
+- Produces: `public.fn_create_trainer_challenge(p_title text, p_title_bg text, p_description text, p_description_bg text, p_challenge_type text, p_target_value integer, p_start_date date, p_end_date date, p_difficulty text, p_category text, p_participants jsonb) returns jsonb`; `public.fn_trainer_update_progress(p_challenge_id uuid, p_client_id uuid, p_value integer) returns jsonb`. Tasks 4–5 call these via `sb.rpc(...)`.
 
 - [ ] **Step 1: Create the migration file with this exact content**
 
@@ -167,7 +166,8 @@ git commit -m "feat(types): add trainer challenge types, shared row guards, expo
 -- challenge + N participant enrollments (ADR-005). Ownership is
 -- derived from auth.uid(); every participant must be an ACTIVE
 -- trainer_clients connection. All-or-nothing: any failure rolls
--- the challenge row back too.
+-- the challenge row back too. points is always stored as 0
+-- (challenges_trainer_zero_points CHECK constraint).
 --
 -- fn_trainer_update_progress: guarded manual progress update for
 -- custom_self_reported trainer challenges. p_value is the ABSOLUTE
@@ -190,7 +190,6 @@ create or replace function public.fn_create_trainer_challenge(
   p_start_date date,
   p_end_date date,
   p_difficulty text,
-  p_points integer,
   p_category text,
   p_participants jsonb
 ) returns jsonb
@@ -222,9 +221,6 @@ begin
   if p_target_value is null or p_target_value <= 0 or p_target_value > 100000 then
     return jsonb_build_object('ok', false, 'error', 'invalid_input');
   end if;
-  if p_points is null or p_points < 0 or p_points > 100000 then
-    return jsonb_build_object('ok', false, 'error', 'invalid_input');
-  end if;
   if p_start_date is null or p_end_date is null or p_end_date <= p_start_date then
     return jsonb_build_object('ok', false, 'error', 'invalid_input');
   end if;
@@ -246,10 +242,14 @@ begin
 
   -- Every element must have a valid uuid userId; customTargetValue,
   -- when present, must be in (0, 100000].
+  -- The `(e->>'userId')::uuid is null` cast is intentionally inside the
+  -- guarded begin/exception block so a malformed (non-uuid) userId string
+  -- raises an exception here and is caught, returning invalid_input instead
+  -- of propagating a raw cast error to the caller.
   begin
     select count(*) into v_bad_target
     from jsonb_array_elements(p_participants) as e
-    where (e->>'userId') is null
+    where (e->>'userId') is null or (e->>'userId')::uuid is null
        or (e ? 'customTargetValue') and (
             (e->>'customTargetValue')::integer <= 0
          or (e->>'customTargetValue')::integer > 100000
@@ -276,13 +276,14 @@ begin
     return jsonb_build_object('ok', false, 'error', 'not_connected');
   end if;
 
+  -- points is hard-zero for trainer challenges (challenges_trainer_zero_points CHECK); the leaderboard is platform-only.
   insert into public.challenges (
     source, creator_id, title, title_bg, description, description_bg,
     challenge_type, cadence, difficulty, target_value, points,
     category, status, start_date, end_date
   ) values (
     'trainer', v_trainer, trim(p_title), p_title_bg, p_description, p_description_bg,
-    p_challenge_type, 'one_time', p_difficulty, p_target_value, p_points,
+    p_challenge_type, 'one_time', p_difficulty, p_target_value, 0,
     p_category, 'active', p_start_date, p_end_date
   ) returning id into v_challenge_id;
 
@@ -305,10 +306,10 @@ end;
 $$;
 
 revoke all on function public.fn_create_trainer_challenge(
-  text, text, text, text, text, integer, date, date, text, integer, text, jsonb
+  text, text, text, text, text, integer, date, date, text, text, jsonb
 ) from public;
 grant execute on function public.fn_create_trainer_challenge(
-  text, text, text, text, text, integer, date, date, text, integer, text, jsonb
+  text, text, text, text, text, integer, date, date, text, text, jsonb
 ) to authenticated;
 
 create or replace function public.fn_trainer_update_progress(
@@ -757,7 +758,6 @@ describe('createTrainerChallenge', () => {
     startDate: '2026-07-06',
     endDate: '2026-07-13',
     difficulty: 'medium' as const,
-    points: 150,
     category: 'strength' as const,
     participants: [
       { userId: 'client-1' },
@@ -779,7 +779,6 @@ describe('createTrainerChallenge', () => {
       p_start_date: '2026-07-06',
       p_end_date: '2026-07-13',
       p_difficulty: 'medium',
-      p_points: 150,
       p_category: 'strength',
       p_participants: [
         { userId: 'client-1' },
@@ -793,8 +792,6 @@ describe('createTrainerChallenge', () => {
     ['zero target', { ...valid, targetValue: 0 }],
     ['float target', { ...valid, targetValue: 2.5 }],
     ['oversize target', { ...valid, targetValue: 100001 }],
-    ['negative points', { ...valid, points: -1 }],
-    ['oversize points', { ...valid, points: 100001 }],
     ['end before start', { ...valid, endDate: '2026-07-01' }],
     ['end equals start', { ...valid, endDate: '2026-07-06' }],
     ['no participants', { ...valid, participants: [] }],
@@ -864,7 +861,6 @@ export async function createTrainerChallenge(
   const invalid =
     params.title.trim().length === 0 ||
     !isValidIntInRange(params.targetValue, 1, 100000) ||
-    !isValidIntInRange(params.points, 0, 100000) ||
     params.endDate <= params.startDate ||
     params.participants.length < 1 ||
     params.participants.length > 50 ||
@@ -888,7 +884,6 @@ export async function createTrainerChallenge(
     p_start_date: params.startDate,
     p_end_date: params.endDate,
     p_difficulty: params.difficulty,
-    p_points: params.points,
     p_category: params.category ?? null,
     p_participants: params.participants,
   });

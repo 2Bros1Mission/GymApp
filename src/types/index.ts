@@ -401,7 +401,6 @@ export interface CreateTrainerChallengeParams {
   startDate: string; // 'YYYY-MM-DD'
   endDate: string; // 'YYYY-MM-DD'
   difficulty: 'easy' | 'medium' | 'hard';
-  points: number; // display-only reward, 0..100000 — never feeds the leaderboard
   category?: WorkoutCategory;
   participants: { userId: string; customTargetValue?: number }[]; // 1..50
 }

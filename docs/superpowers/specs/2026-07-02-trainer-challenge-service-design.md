@@ -20,7 +20,7 @@ Implement the trainer-side challenge service: create challenges for connected cl
 | RPC hygiene | `security definer`, `set search_path = public, pg_temp`, `grant execute to authenticated`, `revoke from public` | Matches `fn_get_user_rank_info` (Aleksandar's PR #161 fix) — `pg_temp` per CVE-2018-1058; S4 note from PR #160. |
 | Aggregates for list view | One joined query, aggregate in JS | Avoids N+1 (quality standard §2). Trainer challenges have ≤50 participants, so JS aggregation over the joined rows is cheap; no LATERAL needed. |
 | Participants cap | 1–50 per challenge | Bounds the atomic insert and the jsonb payload; a trainer with more clients creates multiple challenges. |
-| Points cap | `0..100000` at creation | Prevents integer-overflow paths (S2 lesson); points are display-only anyway per the leaderboard decision. |
+| Trainer challenge points | Hard-zero — the create RPC always inserts points = 0 | Schema constraint challenges_trainer_zero_points (#128) forbids non-zero points on source='trainer' rows; it is the DB-level enforcement of the "trainer challenges never feed the leaderboard" decision. A cosmetic reward display for the builder UI (#145), if wanted, is a future column — not challenges.points. |
 
 ## Public API — `src/lib/trainerChallengeService.ts`
 
@@ -37,7 +37,6 @@ export interface CreateTrainerChallengeParams {
   startDate: string;   // 'YYYY-MM-DD'
   endDate: string;     // 'YYYY-MM-DD'
   difficulty: 'easy' | 'medium' | 'hard';
-  points: number;      // display-only reward, 0..100000
   category?: WorkoutCategory;
   participants: { userId: string; customTargetValue?: number }[]; // 1..50
 }
@@ -116,19 +115,18 @@ export interface SaveTemplateParams {
 
 ### `fn_create_trainer_challenge(...) returns jsonb`
 
-Parameters: `p_title text, p_title_bg text, p_description text, p_description_bg text, p_challenge_type text, p_target_value integer, p_start_date date, p_end_date date, p_difficulty text, p_points integer, p_category text, p_participants jsonb`
+Parameters: `p_title text, p_title_bg text, p_description text, p_description_bg text, p_challenge_type text, p_target_value integer, p_start_date date, p_end_date date, p_difficulty text, p_category text, p_participants jsonb`
 
 Flow:
 1. `v_trainer := auth.uid()`; reject if the profile row's `role != 'trainer'` → `'not_a_trainer'`.
 2. Validate (null-safe, three-valued-logic-proof — S1):
    - `char_length(trim(p_title)) > 0` else `'invalid_input'`
    - `p_target_value` is not null and `> 0` and `<= 100000`
-   - `p_points` is not null and `>= 0` and `<= 100000`
    - `p_end_date > p_start_date` (both not null)
    - `p_challenge_type in ('frequency','streak','custom_auto','custom_self_reported')`
    - `p_participants` is a jsonb array with `1 <= length <= 50`; every element has a `userId` uuid; `customTargetValue` when present is `> 0 and <= 100000`
 3. Set-based connection check: every participant userId must have an `active` row in `trainer_clients` with `trainer_id = v_trainer` — if any is missing → `'not_connected'` (no per-client detail leaked).
-4. Insert `challenges` (`source='trainer'`, `cadence='one_time'`, `creator_id=v_trainer`, `status='active'`, dates/category/points from params).
+4. Insert `challenges` (`source='trainer'`, `cadence='one_time'`, `creator_id=v_trainer`, `status='active'`, `points=0` (hard-zero per CHECK constraint), dates/category from params).
 5. Insert `challenge_participants` per element: `source='trainer_assigned'`, `status='active'`, `current_progress=0`, `target_value=coalesce(customTargetValue, p_target_value)`, `joined_at=now()`.
 6. Any error → whole transaction rolls back. Return `jsonb_build_object('ok', true, 'challenge_id', v_id)`.
 
@@ -159,7 +157,7 @@ Both functions: `language plpgsql`, `security definer`, `set search_path = publi
 
 | Function | Cases |
 |---|---|
-| `createTrainerChallenge` | happy path (RPC called with correct jsonb incl. overrides); each client-side validation rejection (empty title, 0/51 participants, bad dates via string compare, out-of-range target/points) with no RPC call; RPC error codes (`not_a_trainer`, `not_connected`, `invalid_input`) surfaced; RPC exception → `'unknown'` |
+| `createTrainerChallenge` | happy path (RPC called with correct jsonb incl. overrides); each client-side validation rejection (empty title, 0/51 participants, bad dates via string compare, out-of-range target) with no RPC call; RPC error codes (`not_a_trainer`, `not_connected`, `invalid_input`) surfaced; RPC exception → `'unknown'` |
 | `updateClientProgress` | happy (not completed); completion (`completed: true`); `invalid_value` client-side for null/NaN/0/negative/>100000 before network; RPC codes `not_found`/`not_allowed` surfaced |
 | `saveTrainerTemplate` | happy; empty title rejected client-side; PostgrestError → `{success:false}` |
 | `getTrainerTemplates` | happy sorted DESC; empty → `[]`; error → generic throw |
