@@ -2,6 +2,7 @@ import {
   saveTrainerTemplate,
   getTrainerTemplates,
   deleteTrainerTemplate,
+  createTrainerChallenge,
 } from '../trainerChallengeService';
 
 interface QueryRecord {
@@ -178,5 +179,82 @@ describe('deleteTrainerTemplate', () => {
   it('returns the generic error string on PostgrestError', async () => {
     mockQueue.push({ data: null, error: { message: 'boom', code: '08000' } });
     await expect(deleteTrainerTemplate('tpl-1')).resolves.toEqual({ error: 'unknown' });
+  });
+});
+
+// ─── createTrainerChallenge ─────────────────────────────────────────────────
+
+describe('createTrainerChallenge', () => {
+  const valid = {
+    title: 'Team Push Week',
+    titleBg: 'Тимова седмица',
+    description: 'Push hard',
+    descriptionBg: undefined,
+    challengeType: 'custom_self_reported' as const,
+    targetValue: 10,
+    startDate: '2026-07-06',
+    endDate: '2026-07-13',
+    difficulty: 'medium' as const,
+    category: 'strength' as const,
+    participants: [
+      { userId: 'client-1' },
+      { userId: 'client-2', customTargetValue: 15 },
+    ],
+  };
+
+  it('calls the RPC with the full jsonb payload and returns the id', async () => {
+    mockRpc.mockResolvedValue({ data: { ok: true, challenge_id: 'ch-9' }, error: null });
+    const res = await createTrainerChallenge(valid);
+    expect(res).toEqual({ success: true, challengeId: 'ch-9' });
+    expect(mockRpc).toHaveBeenCalledWith('fn_create_trainer_challenge', {
+      p_title: 'Team Push Week',
+      p_title_bg: 'Тимова седмица',
+      p_description: 'Push hard',
+      p_description_bg: null,
+      p_challenge_type: 'custom_self_reported',
+      p_target_value: 10,
+      p_start_date: '2026-07-06',
+      p_end_date: '2026-07-13',
+      p_difficulty: 'medium',
+      p_category: 'strength',
+      p_participants: [
+        { userId: 'client-1' },
+        { userId: 'client-2', customTargetValue: 15 },
+      ],
+    });
+  });
+
+  it.each([
+    ['empty title', { ...valid, title: '  ' }],
+    ['zero target', { ...valid, targetValue: 0 }],
+    ['float target', { ...valid, targetValue: 2.5 }],
+    ['oversize target', { ...valid, targetValue: 100001 }],
+    ['end before start', { ...valid, endDate: '2026-07-01' }],
+    ['end equals start', { ...valid, endDate: '2026-07-06' }],
+    ['no participants', { ...valid, participants: [] }],
+    ['51 participants', { ...valid, participants: Array.from({ length: 51 }, (_, i) => ({ userId: `c-${i}` })) }],
+    ['bad override', { ...valid, participants: [{ userId: 'c-1', customTargetValue: 0 }] }],
+  ])('rejects %s before any network call', async (_label, bad) => {
+    const res = await createTrainerChallenge(bad);
+    expect(res).toEqual({ success: false, error: 'invalid_input' });
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it.each(['not_a_trainer', 'not_connected', 'invalid_input'])(
+    'surfaces RPC error code %s',
+    async (code) => {
+      mockRpc.mockResolvedValue({ data: { ok: false, error: code }, error: null });
+      const res = await createTrainerChallenge(valid);
+      expect(res).toEqual({ success: false, error: code });
+    },
+  );
+
+  it('returns unknown when the RPC itself errors', async () => {
+    const raw = { message: 'function does not exist', code: '42883' };
+    mockRpc.mockResolvedValue({ data: null, error: raw });
+    const res = await createTrainerChallenge(valid);
+    expect(res).toEqual({ success: false, error: 'unknown' });
+    expect((console.error as jest.Mock).mock.calls[0][0]).toBe('[trainerChallengeService] createTrainerChallenge:');
+    expect((console.error as jest.Mock).mock.calls[0][1]).toBe(raw);
   });
 });

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { asNumber, asString } from './rowGuards';
 import type {
+  CreateTrainerChallengeParams,
   SaveTemplateParams,
   TrainerChallengeTemplate,
 } from '../types';
@@ -96,4 +97,56 @@ export async function deleteTrainerTemplate(
     return { error: 'not_found' };
   }
   return {};
+}
+
+// ─── Create ──────────────────────────────────────────────────────────────────
+
+function isValidIntInRange(v: number, min: number, max: number): boolean {
+  return Number.isInteger(v) && v >= min && v <= max;
+}
+
+export async function createTrainerChallenge(
+  params: CreateTrainerChallengeParams,
+): Promise<{ success: boolean; challengeId?: string; error?: string }> {
+  // Mirrors fn_create_trainer_challenge's validation (S1): reject at
+  // the boundary without a round-trip. Dates compare as ISO strings —
+  // never new Date('YYYY-MM-DD') (UTC-midnight shift, PR #160).
+  const invalid =
+    params.title.trim().length === 0 ||
+    !isValidIntInRange(params.targetValue, 1, 100000) ||
+    params.endDate <= params.startDate ||
+    params.participants.length < 1 ||
+    params.participants.length > 50 ||
+    params.participants.some(
+      (p) =>
+        p.userId.trim().length === 0 ||
+        (p.customTargetValue !== undefined &&
+          !isValidIntInRange(p.customTargetValue, 1, 100000)),
+    );
+  if (invalid) {
+    return { success: false, error: 'invalid_input' };
+  }
+
+  const { data, error } = await sb.rpc('fn_create_trainer_challenge', {
+    p_title: params.title,
+    p_title_bg: params.titleBg ?? null,
+    p_description: params.description ?? null,
+    p_description_bg: params.descriptionBg ?? null,
+    p_challenge_type: params.challengeType,
+    p_target_value: params.targetValue,
+    p_start_date: params.startDate,
+    p_end_date: params.endDate,
+    p_difficulty: params.difficulty,
+    p_category: params.category ?? null,
+    p_participants: params.participants,
+  });
+  if (error) {
+    console.error('[trainerChallengeService] createTrainerChallenge:', error);
+    return { success: false, error: 'unknown' };
+  }
+  const result = data as unknown as { ok?: boolean; error?: string; challenge_id?: string } | null;
+  if (!result?.ok) {
+    return { success: false, error: result?.error ?? 'unknown' };
+  }
+  return { success: true, challengeId: result.challenge_id };
 }
