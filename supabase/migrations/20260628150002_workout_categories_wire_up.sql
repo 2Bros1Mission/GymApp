@@ -29,9 +29,28 @@
 --         suggested by the original placeholder comment.
 --
 -- Both objects are `create or replace`, so this migration is idempotent
--- by construction.
+-- by construction — with ONE caveat covered by the `drop function`
+-- below: PostgreSQL's `create or replace function` can only replace a
+-- function with the identical argument signature. The parent RPC in
+-- 20260401120000_save_workout_rpc.sql defined `save_workout` with 6
+-- parameters. Simply issuing `create or replace function
+-- public.save_workout(..., p_category text default null)` here would
+-- create a SECOND overload alongside the 6-arg one, leaving Postgres
+-- unable to pick between them for any 6-arg named-arg call — every
+-- workout save from the client would fail with ERROR 42725 "function
+-- public.save_workout(...) is not unique". `drop function if exists`
+-- on the exact 6-arg signature eliminates the overload before the
+-- replacement is created; `if exists` makes it safe on fresh DBs and
+-- on reruns after this migration has already been applied.
 
 -- ─── [F1a] save_workout with p_category ────────────────────────────────
+
+-- Drop the 6-arg overload from 20260401120000_save_workout_rpc.sql
+-- (also present in 20260400000000_base_schema.sql). `if exists` keeps
+-- this idempotent on reruns.
+drop function if exists public.save_workout(
+  uuid, text, text, integer, text, jsonb
+);
 
 create or replace function public.save_workout(
   p_user_id uuid,
