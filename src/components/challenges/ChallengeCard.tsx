@@ -72,8 +72,8 @@ export function ChallengeCard({ card, onPress }: ChallengeCardProps) {
       <View style={styles.topRow}>
         <Ionicons name={TYPE_ICONS[challenge.challengeType]} size={20} color={colors.primary} />
         {challenge.difficulty && (
-          <View style={[styles.badge, { backgroundColor: colors[DIFFICULTY_COLOR[challenge.difficulty]] as string }]}>
-            <Text style={styles.badgeText}>{challenge.difficulty.toUpperCase()}</Text>
+          <View style={[styles.badge, { backgroundColor: colors[DIFFICULTY_COLOR[challenge.difficulty]] }]}>
+            <Text style={styles.badgeText}>{t(`challenges.difficulty.${challenge.difficulty}`)}</Text>
           </View>
         )}
       </View>

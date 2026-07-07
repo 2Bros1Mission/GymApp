@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ColorPalette, Spacing, FontSize } from '../../constants/theme';
@@ -49,7 +49,7 @@ const makeStyles = (colors: ColorPalette) => StyleSheet.create({
 
 export function DiscoveryView() {
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { guardAction } = useOfflineGuard();
@@ -73,10 +73,14 @@ export function DiscoveryView() {
     enabled: !!userId,
   });
 
+  const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => { if (!loading) setRefreshing(false); }, [loading]);
+  const onRefresh = () => { setRefreshing(true); retry(); };
+
   const handlePress = (card: DiscoveryCard) => {
     if (card.state === 'cooldown') {
       Alert.alert(
-        t('challenges.pick.errorTitle'),
+        t('challenges.pick.title'),
         t('challenges.card.availableIn', { minutes: String(card.availableAt ? minutesUntil(card.availableAt) : 1) }),
       );
       return;
@@ -85,7 +89,7 @@ export function DiscoveryView() {
       Alert.alert(t('challenges.card.limitReached'), t('challenges.card.limitReachedMsg'));
       return;
     }
-    const title = card.challenge.title;
+    const title = language === 'bg' ? card.challenge.titleBg ?? card.challenge.title : card.challenge.title;
     guardAction(() =>
       confirmAction(
         t('challenges.pick.title'),
@@ -104,7 +108,7 @@ export function DiscoveryView() {
     );
   };
 
-  if (loading && !error) {
+  if (loading && !refreshing && !error) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -124,7 +128,7 @@ export function DiscoveryView() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={false} onRefresh={retry} tintColor={colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       {error && <ErrorCard message={error} onRetry={retry} loading={loading} />}
       {!error && isEmpty && (

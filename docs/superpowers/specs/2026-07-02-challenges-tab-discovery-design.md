@@ -72,7 +72,7 @@ const { data, loading, error, retry } = useFocusAsyncData<DiscoveryData>({
     guardAction(() =>
       confirmAction(
         t('challenges.pick.title'),
-        t('challenges.pick.message', { title: localizedTitle(card.challenge) }),
+        t('challenges.pick.message', { title: language === 'bg' ? card.challenge.titleBg ?? card.challenge.title : card.challenge.title }),
         t('challenges.pick.confirm'),
         t('common.cancel'),
         async () => {
@@ -125,7 +125,7 @@ interface ChallengeCardProps {
 
 ## i18n keys (EN + BG, both blocks in `src/constants/i18n.ts`)
 
-`tab.challenges`, `challenges.title`, `challenges.segment.discovery`, `challenges.segment.myChallenges`, `challenges.segment.leaderboard`, `challenges.section.daily`, `challenges.section.weekly`, `challenges.section.monthly`, `challenges.card.target`, `challenges.card.points`, `challenges.card.availableIn`, `challenges.card.limitReached`, `challenges.card.limitReachedMsg`, `challenges.pick.title`, `challenges.pick.message`, `challenges.pick.confirm`, `challenges.pick.errorTitle`, `challenges.pick.error.cooldown`, `challenges.pick.error.limit_reached`, `challenges.pick.error.already_active`, `challenges.pick.error.unknown`, `challenges.empty`, `challenges.comingSoon`.
+`tab.challenges`, `challenges.title`, `challenges.segment.discovery`, `challenges.segment.myChallenges`, `challenges.segment.leaderboard`, `challenges.section.daily`, `challenges.section.weekly`, `challenges.section.monthly`, `challenges.card.target`, `challenges.card.points`, `challenges.card.availableIn`, `challenges.card.limitReached`, `challenges.card.limitReachedMsg`, `challenges.difficulty.easy`, `challenges.difficulty.medium`, `challenges.difficulty.hard`, `challenges.pick.title`, `challenges.pick.message`, `challenges.pick.confirm`, `challenges.pick.errorTitle`, `challenges.pick.error.cooldown`, `challenges.pick.error.limit_reached`, `challenges.pick.error.already_active`, `challenges.pick.error.unknown`, `challenges.empty`, `challenges.comingSoon`.
 
 Interpolation via `t(key, { param })` — never `.replace()`.
 

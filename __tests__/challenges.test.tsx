@@ -122,6 +122,7 @@ describe('ChallengeCard', () => {
     expect(getByText('Five Workouts')).toBeTruthy();
     expect(getByText('challenges.card.target|value=5')).toBeTruthy();
     expect(getByText(/150/)).toBeTruthy();
+    expect(getByText('challenges.difficulty.medium')).toBeTruthy();
   });
 
   it('uses the Bulgarian title when language is bg', () => {
