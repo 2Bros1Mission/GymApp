@@ -77,12 +77,12 @@ const { data, loading, error, retry } = useFocusAsyncData<DiscoveryData>({
         t('common.cancel'),
         async () => {
           const res = await pickChallenge(card.challenge.id);
-          if (res.success) retry();
-          else Alert.alert(t('challenges.pick.errorTitle'), t(`challenges.pick.error.${res.error ?? 'unknown'}`));
+          if (res.ok) retry();
+          else Alert.alert(t('challenges.pick.errorTitle'), t(pickErrorKey(res.error)));
         },
       ));
   ```
-  Known `PickChallengeResult` error codes get dedicated i18n strings (`cooldown`, `limit_reached`, `already_active`); anything else falls to `unknown`. If an error code has no i18n key, the `unknown` string is used (helper guards against missing keys).
+  `PickChallengeResult` is `{ ok, error?, participantId?, availableAt? }` (note: `ok`, not `success`). Codes `cooldown`, `limit_reached`, `already_active` get dedicated i18n strings; `unauthenticated` and anything else map to `challenges.pick.error.unknown` via a small `pickErrorKey` helper (guards against missing keys).
 - Non-available taps: `Alert.alert` — cooldown: `t('challenges.card.availableIn', { minutes })`; limit: `t('challenges.card.limitReachedMsg')`.
 - States: `loading && !data` → centered `ActivityIndicator`; `error` → `ErrorCard(message, onRetry=retry, loading)`; all three arrays empty → empty-state block (trophy icon + `t('challenges.empty')`).
 
