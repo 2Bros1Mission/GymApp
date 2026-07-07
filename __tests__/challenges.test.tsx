@@ -4,6 +4,12 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { ChallengeCard } from '../src/components/challenges/ChallengeCard';
 import type { Challenge, DiscoveryCard } from '../src/types';
 
+// ── added for DiscoveryView ──
+import { DiscoveryView } from '../src/components/challenges/DiscoveryView';
+import { Alert } from 'react-native';
+
+import ChallengesScreen from '../app/(tabs)/challenges';
+
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -35,10 +41,6 @@ jest.mock('../src/contexts/ThemeContext', () => ({
     },
   }),
 }));
-
-// ── added for DiscoveryView ──
-import { DiscoveryView } from '../src/components/challenges/DiscoveryView';
-import { Alert } from 'react-native';
 
 const mockGetDiscoveryPool = jest.fn();
 const mockGetUserChallengeState = jest.fn();
@@ -230,8 +232,6 @@ describe('DiscoveryView', () => {
     alertSpy.mockRestore();
   });
 });
-
-import ChallengesScreen from '../app/(tabs)/challenges';
 
 jest.mock('../src/components/ResponsiveContainer', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => children,
