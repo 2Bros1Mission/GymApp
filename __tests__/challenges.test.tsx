@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 import { ChallengeCard } from '../src/components/challenges/ChallengeCard';
 import type { Challenge, DiscoveryCard } from '../src/types';
@@ -35,6 +35,50 @@ jest.mock('../src/contexts/ThemeContext', () => ({
     },
   }),
 }));
+
+// ── added for DiscoveryView ──
+import { DiscoveryView } from '../src/components/challenges/DiscoveryView';
+import { Alert } from 'react-native';
+
+const mockGetDiscoveryPool = jest.fn();
+const mockGetUserChallengeState = jest.fn();
+const mockPickChallenge = jest.fn();
+jest.mock('../src/lib/challengeService', () => ({
+  getDiscoveryPool: (...a: unknown[]) => mockGetDiscoveryPool(...a),
+  getUserChallengeState: (...a: unknown[]) => mockGetUserChallengeState(...a),
+  pickChallenge: (...a: unknown[]) => mockPickChallenge(...a),
+}));
+
+jest.mock('../src/contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'user-1' } }),
+}));
+
+const mockGuardAction = jest.fn((action: () => void | Promise<void>) => action());
+jest.mock('../src/hooks/useOfflineGuard', () => ({
+  useOfflineGuard: () => ({ isConnected: true, guardAction: mockGuardAction }),
+}));
+
+// confirmAction auto-confirms so the pick flow proceeds in tests
+jest.mock('../src/lib/confirm', () => ({
+  confirmAction: (
+    _t: string, _m: string, _d: string, _c: string, onConfirm: () => void,
+  ) => onConfirm(),
+}));
+
+// useFocusEffect → run the effect once like useEffect (react-navigation not mounted in tests)
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (cb: () => void) => {
+    const React = jest.requireActual<typeof import('react')>('react');
+    React.useEffect(() => { cb(); }, [cb]);
+  },
+}));
+
+const emptyPool = { daily: [], weekly: [], monthly: [] };
+const stateRows = [
+  { cadence: 'daily', completionsThisPeriod: 1, maxCompletions: 1, activeCount: 0, maxActive: 1, lastPickAt: null, cooldownEndsAt: null },
+  { cadence: 'weekly', completionsThisPeriod: 2, maxCompletions: 5, activeCount: 1, maxActive: 3, lastPickAt: null, cooldownEndsAt: null },
+  { cadence: 'monthly', completionsThisPeriod: 0, maxCompletions: 10, activeCount: 0, maxActive: 5, lastPickAt: null, cooldownEndsAt: null },
+];
 
 const makeChallenge = (extra: Partial<Challenge> = {}): Challenge => ({
   id: 'ch-1',
@@ -111,5 +155,78 @@ describe('ChallengeCard', () => {
     const { getByTestId } = render(<ChallengeCard card={card} onPress={onPress} />);
     fireEvent.press(getByTestId('challenge-card-ch-1'));
     expect(onPress).toHaveBeenCalledWith(card);
+  });
+});
+
+describe('DiscoveryView', () => {
+  beforeEach(() => {
+    mockGetDiscoveryPool.mockResolvedValue(emptyPool);
+    mockGetUserChallengeState.mockResolvedValue(stateRows);
+    mockPickChallenge.mockResolvedValue({ ok: true, participantId: 'p-1' });
+  });
+
+  it('renders section headers with completion counts', async () => {
+    mockGetDiscoveryPool.mockResolvedValue({
+      daily: [makeCard('available')], weekly: [], monthly: [],
+    });
+    const { findByText } = render(<DiscoveryView />);
+    expect(await findByText(/challenges\.section\.daily.*1\/1/)).toBeTruthy();
+    expect(await findByText(/challenges\.section\.weekly.*2\/5/)).toBeTruthy();
+  });
+
+  it('shows the empty message when all three cadences are empty', async () => {
+    const { findByText } = render(<DiscoveryView />);
+    expect(await findByText('challenges.empty')).toBeTruthy();
+  });
+
+  it('shows ErrorCard when the fetch fails and retry refetches', async () => {
+    mockGetDiscoveryPool.mockRejectedValueOnce(new Error('Failed to load'));
+    const { findByText } = render(<DiscoveryView />);
+    expect(await findByText(/Failed to load/)).toBeTruthy();
+  });
+
+  it('picks an available card: confirm → pickChallenge → refetch', async () => {
+    mockGetDiscoveryPool.mockResolvedValue({ daily: [makeCard('available')], weekly: [], monthly: [] });
+    const { findByTestId } = render(<DiscoveryView />);
+    fireEvent.press(await findByTestId('challenge-card-ch-1'));
+    await waitFor(() => expect(mockPickChallenge).toHaveBeenCalledWith('ch-1'));
+    await waitFor(() => expect(mockGetDiscoveryPool).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows a typed alert when pick fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockPickChallenge.mockResolvedValue({ ok: false, error: 'limit_reached' });
+    mockGetDiscoveryPool.mockResolvedValue({ daily: [makeCard('available')], weekly: [], monthly: [] });
+    const { findByTestId } = render(<DiscoveryView />);
+    fireEvent.press(await findByTestId('challenge-card-ch-1'));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('challenges.pick.errorTitle', 'challenges.pick.error.limit_reached'),
+    );
+    alertSpy.mockRestore();
+  });
+
+  it('maps unauthenticated pick errors to the unknown message', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockPickChallenge.mockResolvedValue({ ok: false, error: 'unauthenticated' });
+    mockGetDiscoveryPool.mockResolvedValue({ daily: [makeCard('available')], weekly: [], monthly: [] });
+    const { findByTestId } = render(<DiscoveryView />);
+    fireEvent.press(await findByTestId('challenge-card-ch-1'));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('challenges.pick.errorTitle', 'challenges.pick.error.unknown'),
+    );
+    alertSpy.mockRestore();
+  });
+
+  it('cooldown card tap shows an informative alert and never calls pickChallenge', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockGetDiscoveryPool.mockResolvedValue({
+      daily: [makeCard('cooldown', { availableAt: new Date(Date.now() + 120000).toISOString() })],
+      weekly: [], monthly: [],
+    });
+    const { findByTestId } = render(<DiscoveryView />);
+    fireEvent.press(await findByTestId('challenge-card-ch-1'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(mockPickChallenge).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 });
