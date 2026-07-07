@@ -230,3 +230,38 @@ describe('DiscoveryView', () => {
     alertSpy.mockRestore();
   });
 });
+
+import ChallengesScreen from '../app/(tabs)/challenges';
+
+jest.mock('../src/components/ResponsiveContainer', () => ({
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('../src/hooks/useBreakpoint', () => ({
+  useBreakpoint: () => 'sm',
+}));
+
+describe('ChallengesScreen (tab shell)', () => {
+  beforeEach(() => {
+    mockGetDiscoveryPool.mockResolvedValue(emptyPool);
+    mockGetUserChallengeState.mockResolvedValue(stateRows);
+  });
+
+  it('defaults to the Discovery segment', async () => {
+    const { findByText } = render(<ChallengesScreen />);
+    expect(await findByText('challenges.empty')).toBeTruthy(); // DiscoveryView content
+  });
+
+  it('switches to My Challenges placeholder', async () => {
+    const { getByText, findByText } = render(<ChallengesScreen />);
+    fireEvent.press(getByText('challenges.segment.myChallenges'));
+    expect(await findByText('challenges.comingSoon')).toBeTruthy();
+  });
+
+  it('switches to Leaderboard placeholder and back to Discovery', async () => {
+    const { getByText, findByText } = render(<ChallengesScreen />);
+    fireEvent.press(getByText('challenges.segment.leaderboard'));
+    expect(await findByText('challenges.comingSoon')).toBeTruthy();
+    fireEvent.press(getByText('challenges.segment.discovery'));
+    expect(await findByText('challenges.empty')).toBeTruthy();
+  });
+});

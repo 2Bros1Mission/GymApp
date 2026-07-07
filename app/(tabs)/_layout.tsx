@@ -88,6 +88,15 @@ export default function TabLayout() {
 
           {/* Shared */}
           <Tabs.Screen
+            name="challenges"
+            options={{
+              title: t('tab.challenges'),
+              tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+                <Ionicons name="trophy" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
             name="profile"
             options={{
               title: t('tab.profile'),
