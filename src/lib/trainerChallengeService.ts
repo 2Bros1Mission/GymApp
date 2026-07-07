@@ -109,6 +109,16 @@ function isValidIntInRange(v: number, min: number, max: number): boolean {
   return Number.isInteger(v) && v >= min && v <= max;
 }
 
+// Progress paths for trainer challenges:
+//   - frequency / streak / custom_auto: auto-progressed by the workout-log
+//     trigger (fn_workout_log_challenge_progress, #133). If the challenge has
+//     a category, only workouts logged with a MATCHING category count
+//     (#148 wire-up); NULL-category logs never match a categorized challenge.
+//   - custom_self_reported: manual-only via updateClientProgress /
+//     fn_trainer_update_progress. The workout trigger skips these.
+// Leaderboard points are never awarded for trainer challenges — the trigger's
+// points write is gated on source = 'platform', and challenges.points is
+// hard-zero for trainer rows (challenges_trainer_zero_points CHECK).
 export async function createTrainerChallenge(
   params: CreateTrainerChallengeParams,
 ): Promise<{ success: boolean; challengeId?: string; error?: string }> {
@@ -118,6 +128,9 @@ export async function createTrainerChallenge(
   const invalid =
     params.title.trim().length === 0 ||
     !isValidIntInRange(params.targetValue, 1, 100000) ||
+    // zero-padded ISO required — the <= comparison below is lexical
+    !/^\d{4}-\d{2}-\d{2}$/.test(params.startDate) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(params.endDate) ||
     params.endDate <= params.startDate ||
     params.participants.length < 1 ||
     params.participants.length > 50 ||

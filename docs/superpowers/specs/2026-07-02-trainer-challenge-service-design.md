@@ -151,6 +151,10 @@ Both functions: `language plpgsql`, `security definer`, `set search_path = publi
 - **Client-side pre-validation** mirrors the RPC checks (S1): runs before the network call, returns the same typed error codes, tested with `mockRpc`/`mockQueries` length-0 assertions.
 - **Mapper boundary** validates runtime shape for critical fields (dates as strings, numbers as numbers) and throws `'malformed_row:<field>'` rather than blind `as`-casting (PR #161 D1 lesson).
 
+## Progress Paths
+
+Trainer challenges of type `frequency`, `streak`, or `custom_auto` are auto-progressed by the workout-log trigger (`fn_workout_log_challenge_progress`, #133): each logged workout advances any matching active participant row. If the challenge has a `category` set, only workouts logged with a matching category count (#148 wire-up) — a `NULL`-category workout log never advances a categorized challenge. `custom_self_reported` challenges are the exception: they are manual-only, updated solely via `updateClientProgress` / `fn_trainer_update_progress`, and the workout-log trigger explicitly skips them. Regardless of type, trainer challenges never award leaderboard points — the trigger's points write is gated on `source = 'platform'`, and `challenges.points` is hard-zeroed for trainer rows by the `challenges_trainer_zero_points` CHECK constraint.
+
 ## Testing
 
 `src/lib/__tests__/trainerChallengeService.test.ts` — queue-based fluent-chain mock + `mockRpc`, mirroring `challengeService.test.ts`. **All fixtures DB-shaped** (snake_case keys, bare `'YYYY-MM-DD'` date strings, explicit nulls) — not TS-type-shaped (PR #161 fixture lesson).

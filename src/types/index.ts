@@ -396,7 +396,7 @@ export interface CreateTrainerChallengeParams {
   titleBg?: string;
   description?: string;
   descriptionBg?: string;
-  challengeType: 'frequency' | 'streak' | 'custom_auto' | 'custom_self_reported';
+  challengeType: Challenge['challengeType']; // same closed set as the domain type — can't drift
   targetValue: number;
   startDate: string; // 'YYYY-MM-DD'
   endDate: string; // 'YYYY-MM-DD'
@@ -409,7 +409,7 @@ export interface SaveTemplateParams {
   title: string;
   challengeType: 'frequency' | 'streak' | 'custom';
   targetValue: number;
-  category?: string;
+  category?: string; // deliberately plain string: mirrors trainer_challenge_templates.category (text, no CHECK) and TrainerChallengeTemplate from #131
   description?: string;
 }
 
